@@ -1,4 +1,5 @@
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from bot.core.constants import callbacks as cb
 
 '''
   search_buttons() - панель кнопок для навигации по полученному списку конференций
@@ -10,8 +11,8 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 def search_buttons():
   kb = InlineKeyboardBuilder()
-  kb.button(text="➡ Показать ещё", callback_data="more")
-  kb.button(text="🔍 Новый поиск", callback_data="search")
-  kb.button(text="⬅ Меню", callback_data="main_menu")
+  kb.button(text="➡ Показать ещё", callback_data=cb.MORE)
+  kb.button(text="🔍 Новый поиск", callback_data=cb.SEARCH)
+  kb.button(text="⬅ Меню", callback_data=cb.MAIN_MENU)
   kb.adjust(1)
   return kb.as_markup()

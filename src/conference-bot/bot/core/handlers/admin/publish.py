@@ -2,15 +2,16 @@ from aiogram import Router, F
 from aiogram.types import CallbackQuery
 from aiogram.fsm.context import FSMContext
 
-from bot.states.states import AddConference
-from bot.keyboards.admin import post_buttons
-from bot.keyboards.common import main_menu
-from bot.messages import MESSAGES
+from bot.core.constants import callbacks as cb
+from bot.core.states.states import AddConference
+from bot.core.keyboards.admin import post_buttons
+from bot.core.keyboards.common import main_menu
+from bot.core.constants.messages import MESSAGES
 
 router = Router()
 
 
-@router.callback_query(F.data == "finish_tags")
+@router.callback_query(F.data == cb.FINISH_TAGS)
 async def finish_tags(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     selected = data.get("selected_tags", [])
@@ -35,7 +36,7 @@ async def finish_tags(callback: CallbackQuery, state: FSMContext):
     await state.set_state(AddConference.post)
 
 
-@router.callback_query(F.data == "publish")
+@router.callback_query(F.data == cb.PUBLISH)
 async def publish(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     await callback.message.edit_text(

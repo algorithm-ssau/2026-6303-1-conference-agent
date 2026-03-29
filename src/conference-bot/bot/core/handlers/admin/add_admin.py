@@ -2,13 +2,12 @@ from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
 
-from bot.states.states import AddAdmin
-from bot.keyboards.common import back_button
-from bot.keyboards.admin import ocr_buttons
+from bot.core.states.states import AddAdmin
+from bot.core.keyboards.common import back_button
+from bot.core.keyboards.admin import ocr_buttons
 from .common import is_admin
 
 router = Router()
-
 
 @router.callback_query(F.data == "add_admin")
 async def add_admin(callback: CallbackQuery, state: FSMContext):

@@ -2,9 +2,9 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 
-from bot.keyboards.common import main_menu, back_button
-from bot.keyboards.user import search_buttons
-from bot.states.states import Search
+from bot.core.keyboards.common import main_menu, back_button
+from bot.core.keyboards.user import search_buttons
+from bot.core.states.states import Search
 from bot.config import ADMIN_IDS
 
 router = Router()
