@@ -31,13 +31,23 @@ def data_buttons():
   return kb.as_markup()
 
 
-def hashtag_buttons():
-  kb = InlineKeyboardBuilder()
-  kb.button(text="➕ Добавить свой", callback_data="add_tag")
-  kb.button(text="➡ Далее", callback_data="to_post")
-  kb.button(text="❌ Отмена", callback_data="main_menu")
-  kb.adjust(1)
-  return kb.as_markup()
+
+def hashtags_keyboard(tags: list[str], selected: list[str]):
+    kb = InlineKeyboardBuilder()
+
+    for tag in tags:
+        mark = "☑" if tag in selected else "☐"
+        kb.button(
+            text=f"{mark} {tag}",
+            callback_data=f"toggle_tag:{tag}"
+        )
+
+    kb.button(text="➕ Добавить свой", callback_data="add_tag")
+    kb.button(text="✅ Готово", callback_data="finish_tags")
+    kb.button(text="❌ Отмена", callback_data="main_menu")
+
+    kb.adjust(1)
+    return kb.as_markup()
 
 
 def post_buttons():
