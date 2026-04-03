@@ -1,19 +1,63 @@
 import asyncio
+import logging
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.exceptions import TelegramNetworkError, TelegramRetryAfter
+from aiogram.client.default import DefaultBotProperties
+from aiogram.client.telegram import TelegramAPIServer
+from aiogram.client.session.aiohttp import AiohttpSession
+from bot.config import TOKEN, PROXY_URL
+from bot.core.handlers import callbacks_router, get_admin_router, user_router, disabled_handler
 
 
-from bot.config import TOKEN
-from bot.handlers import user, admin
+logging.basicConfig(level=logging.INFO)
+
+async def on_startup():
+    logging.info("Бот запущен!")
+
+
+async def on_shutdown():
+    logging.info("Бот остановлен!")
+
 
 async def main():
-  bot = Bot(token=TOKEN)
-  dp = Dispatcher(storage=MemoryStorage())
+    timeout = 15
+    custom_server = TelegramAPIServer.from_base(PROXY_URL)
+    session = AiohttpSession(api=custom_server, timeout=timeout)
+    
+    bot = Bot(
+        token=TOKEN, 
+        session=session,
+        default=DefaultBotProperties(parse_mode="HTML")
+    )
+    
+    dp = Dispatcher(storage=MemoryStorage())
+    
+    dp.startup.register(on_startup)
+    dp.shutdown.register(on_shutdown)
+    
+    dp.include_router(disabled_handler)
+    dp.include_router(callbacks_router)  # общие
+    dp.include_router(user_router)     # пользовательские
+    dp.include_router(get_admin_router()) # админские
+    
 
-  dp.include_router(user.router)
-  dp.include_router(admin.router)
+    while True:
+        try:
+            await dp.start_polling(bot)
+        except TelegramNetworkError as e:
+            logging.error(f"Ошибка сети: {e}. Переподключение через 5 секунд...")
+            await asyncio.sleep(5)
+        except TelegramRetryAfter as e:
+            logging.error(f"Слишком много запросов. Повтор через {e.retry_after} секунд")
+            await asyncio.sleep(e.retry_after)
+        except Exception as e:
+            logging.error(f"Неожиданная ошибка: {e}")
+            await asyncio.sleep(3)
 
-  await dp.start_polling(bot)
 
 if __name__ == "__main__":
-  asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logging.info("Бот остановлен пользователем")

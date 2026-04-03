@@ -1,44 +1,90 @@
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
-
-from bot.core.keyboards.common import main_menu, back_button
-from bot.core.keyboards.user import search_buttons
+from bot.core.constants import callbacks as cb, MESSAGES
+from bot.core.keyboards import main_menu, back_button, search_buttons, search_buttons_simple
 from bot.core.states.states import Search
-from bot.config import ADMIN_IDS
+from bot.services import AdminService,SearchService
+
 
 router = Router()
-
-
-
+search_service = SearchService()
 
 
 @router.message(F.text == "/start")
 async def start(message: Message):
-  is_admin = message.from_user.id in ADMIN_IDS
-  await message.answer("Бот для поиска научных конференций.\n\nВыберите действие:", reply_markup=main_menu(is_admin))
+  await message.answer(
+    MESSAGES["main-menu"]["start-msg"],
+    reply_markup=main_menu(AdminService.is_admin(message.from_user.id))
+  )
 
 
-@router.callback_query(F.data == "main_menu")
-async def main_menu_handler(callback: CallbackQuery, state: FSMContext):
-  await state.clear()
-  
-  is_admin = callback.from_user.id in ADMIN_IDS
-  
-  await callback.message.edit_text("Главное меню", reply_markup=main_menu(is_admin))
-
-
-@router.callback_query(F.data == "about")
-async def about(callback: CallbackQuery):
-  await callback.message.edit_text("Заглушка: описание проекта.", reply_markup=back_button())
-
-
-@router.callback_query(F.data == "search")
+@router.callback_query(F.data == cb.SEARCH)
 async def search(callback: CallbackQuery, state: FSMContext):
   await state.set_state(Search.waiting_query)
-  await callback.message.edit_text("Введите тему или название работы:", reply_markup=back_button())
+  await callback.message.edit_text(
+    MESSAGES["search-conf"]["enter-topic"],
+    reply_markup=back_button()
+  )
 
 
 @router.message(Search.waiting_query)
-async def process_search(message: Message):
-  await message.answer("Заглушка:\n\n1️⃣ Conf A\n2️⃣ Conf B\n3️⃣ Conf C", reply_markup=search_buttons())
+async def process_search(message: Message, state: FSMContext):
+  query = message.text.strip()
+  
+  if not query:
+    await message.answer(
+      MESSAGES["errors"]["enter-search-request"],
+      reply_markup=back_button()
+    )
+
+    return
+  
+
+  await state.update_data(last_query=query, current_offset=0)
+  results = await search_service.search(query, limit=5, offset=0)
+  
+  await state.update_data(total_results=results["total"])
+  formatted_results = SearchService.format_search_results(results["results"])
+  
+  has_more = results["has_more"] and results["total"] > 5
+  
+  await message.answer(
+    formatted_results,
+    reply_markup=search_buttons(has_more=has_more, offset=results["offset"] + results["limit"]),
+    parse_mode="HTML"
+  )
+
+  
+@router.callback_query(F.data.startswith(cb.MORE))
+async def show_more(callback: CallbackQuery, state: FSMContext):
+  await callback.answer()
+  
+  try:
+    offset = SearchService.parse_offset(callback.data)
+  except (IndexError, ValueError):
+    offset = 0
+  
+  data = await state.get_data()
+  query = data.get("last_query", "")
+  total_results = data.get("total_results", 0)
+  
+  if not query:
+    await callback.message.edit_text(
+      MESSAGES["errors"]["search-request-not-found"],
+      reply_markup=search_buttons_simple()
+    )
+    return
+  
+  results = await search_service.search(query, limit=5, offset=offset)
+  formatted_results = SearchService.format_search_results(results["results"])
+  has_more = offset + results["limit"] < total_results
+  
+  await callback.message.edit_text(
+    formatted_results,
+    reply_markup=search_buttons(
+      has_more=has_more,
+      offset=offset + results["limit"]
+    ),
+    parse_mode="HTML"
+  )

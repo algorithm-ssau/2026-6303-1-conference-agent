@@ -1,14 +1,6 @@
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from bot.core.constants import callbacks as cb
-
-'''
-  main_menu(is_admin) - главная панель бота, имеет два варианта отображения 
-    (с кнопкой "добавить конференцию" / без) в зависимости от значения флага is_admin
-  
-  back_button() - кнопка, возвращающая в главную панель
-'''
-
-
+from bot.core.callbacks import AdminCallback
 
 def main_menu(is_admin=False):
   kb = InlineKeyboardBuilder()
@@ -16,8 +8,14 @@ def main_menu(is_admin=False):
   kb.button(text="ℹ️ О проекте", callback_data=cb.ABOUT)
 
   if is_admin:
-    kb.button(text="➕ Добавить конференцию", callback_data=cb.ADD_CONF)
-    kb.button(text="➕ Добавить админа", callback_data=cb.ADD_ADMIN)
+    kb.button(
+      text="➕ Добавить конференцию", 
+      callback_data=AdminCallback(action="add_conf").pack()
+    )
+    kb.button(
+      text="➕ Добавить админа", 
+      callback_data=AdminCallback(action="add_admin").pack()
+      )
 
   kb.adjust(1)
   return kb.as_markup()

@@ -2,44 +2,34 @@ from aiogram import Router, F
 from aiogram.types import CallbackQuery
 from aiogram.fsm.context import FSMContext
 
-from bot.core.constants import callbacks as cb
+from bot.core.constants import MESSAGES
+from bot.core.callbacks import TagCallback, FlowCallback
 from bot.core.states.states import AddConference
-from bot.core.keyboards.admin import post_buttons
-from bot.core.keyboards.common import main_menu
-from bot.core.constants.messages import MESSAGES
+from bot.core.keyboards import post_buttons,main_menu
+from bot.services import ConferenceService, AdminService
+
 
 router = Router()
 
-
-@router.callback_query(F.data == cb.FINISH_TAGS)
+@router.callback_query(TagCallback.filter(F.action == "finish"))
 async def finish_tags(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
     data = await state.get_data()
-    selected = data.get("selected_tags", [])
-
-    post_text = MESSAGES["stub-post"]["text"]
-    post_text = (
-        "Финальный вариант поста с хэштегами:\n"
-        + "<blockquote>" + post_text + "</blockquote>"
-    )
-
-    if selected:
-        post_text += "\n\n" + " ".join(selected)
-
+    post_text = ConferenceService.build_post(data)
     await state.update_data(post_text=post_text)
-
+    await state.set_state(AddConference.post)
     await callback.message.edit_text(
         post_text,
         reply_markup=post_buttons(),
         parse_mode="HTML"
     )
 
-    await state.set_state(AddConference.post)
 
-
-@router.callback_query(F.data == cb.PUBLISH)
+@router.callback_query(FlowCallback.filter(F.action == "publish"))
 async def publish(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
     await state.clear()
     await callback.message.edit_text(
-        "Пост опубликован (заглушка).",
-        reply_markup=main_menu(True)
+        MESSAGES["publish-post"]["success"],
+        reply_markup=main_menu(AdminService.is_admin(callback.from_user.id))
     )
