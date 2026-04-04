@@ -1,0 +1,35 @@
+from aiogram import Router, F
+from aiogram.types import CallbackQuery
+from aiogram.fsm.context import FSMContext
+
+from bot.core.constants import MESSAGES
+from bot.core.callbacks import TagCallback, FlowCallback
+from bot.core.states.states import AddConference
+from bot.core.keyboards import post_buttons,main_menu
+from bot.services import ConferenceService, AdminService
+
+
+router = Router()
+
+@router.callback_query(TagCallback.filter(F.action == "finish"))
+async def finish_tags(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    data = await state.get_data()
+    post_text = ConferenceService.build_post(data)
+    await state.update_data(post_text=post_text)
+    await state.set_state(AddConference.post)
+    await callback.message.edit_text(
+        post_text,
+        reply_markup=post_buttons(),
+        parse_mode="HTML"
+    )
+
+
+@router.callback_query(FlowCallback.filter(F.action == "publish"))
+async def publish(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    await state.clear()
+    await callback.message.edit_text(
+        MESSAGES["publish-post"]["success"],
+        reply_markup=main_menu(AdminService.is_admin(callback.from_user.id))
+    )
