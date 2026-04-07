@@ -25,11 +25,28 @@ async def finish_tags(callback: CallbackQuery, state: FSMContext):
     )
 
 
+# @router.callback_query(FlowCallback.filter(F.action == "publish"))
+# async def publish(callback: CallbackQuery, state: FSMContext):
+#     await callback.answer()
+#     await state.clear()
+#     await callback.message.edit_text(
+#         MESSAGES["publish-post"]["success"],
+#         reply_markup=main_menu(AdminService.is_admin(callback.from_user.id))
+#     )
+
 @router.callback_query(FlowCallback.filter(F.action == "publish"))
 async def publish(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
+    
+    data = await state.get_data()
+    conference_data = data.get("conference_data")
+
+    if conference_data:
+        await ConferenceService.create_conference(conference_data)
+
     await state.clear()
+
     await callback.message.edit_text(
         MESSAGES["publish-post"]["success"],
-        reply_markup=main_menu(AdminService.is_admin(callback.from_user.id))
+        reply_markup=main_menu(...)
     )

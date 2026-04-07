@@ -1,5 +1,6 @@
 from typing import Dict, Any, List, Optional
 from bot.models.conference import Conference
+from bot.repositories.conference_repository import ConferenceRepository
 from bot.core.constants import MESSAGES
 
 class ConferenceService:
@@ -88,5 +89,13 @@ class ConferenceService:
     # /заглушка
     
     return True
+  
+  '''
+    Добавление конференции в БД
+  '''
+  
+  @staticmethod
+  async def create_conference(data: dict):
+      return await ConferenceRepository.create(data)
   
  

@@ -8,11 +8,12 @@ from aiogram.client.telegram import TelegramAPIServer
 from aiogram.client.session.aiohttp import AiohttpSession
 from bot.config import TOKEN, PROXY_URL
 from bot.core.handlers import callbacks_router, get_admin_router, user_router, disabled_handler
-
+from bot.database.schema import init_db
 
 logging.basicConfig(level=logging.INFO)
 
 async def on_startup():
+    init_db()
     logging.info("Бот запущен!")
 
 

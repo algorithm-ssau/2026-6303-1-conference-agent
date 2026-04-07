@@ -33,6 +33,17 @@ async def add_conf(callback: CallbackQuery, state: FSMContext):
 
 @router.message(AddConference.waiting_for_file)
 async def process_file(message: Message, state: FSMContext):
+    # заглушка
+    await state.update_data(
+        conference_data={
+            "name": "Test Conference",
+            "conference_date": "2026-06-01",
+            "location": "Berlin",
+            "submission_deadline": "2026-05-01"
+        }
+    )
+    # /заглушка
+    
     await state.set_state(AddConference.ocr_check)
     await message.answer(
         MESSAGES["add-conf"]["ocr-stub"],
@@ -56,31 +67,11 @@ async def data_ok(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
     tags = ConferenceService.get_default_tags()
     await state.update_data(available_tags=tags, selected_tags=[])
-    # await state.set_state(AddConference.hashtags)
-    # await callback.message.edit_text(
-    #     MESSAGES["add-conf"]["add-tags"],
-    #     reply_markup=hashtags_keyboard(tags, [])
-    # )
     await state.set_state(AddConference.confirm_save)
     await callback.message.edit_text(
         MESSAGES["add-conf"]["confirm-save"],
         reply_markup = confirm_conf_buttons()
     )
-
-# @router.callback_query(F.data == cb.CONFIRM_SAVE_CONF)
-# async def confirm_save_conf(callback: CallbackQuery, state: FSMContext):
-#     await callback.answer()
-    
-#     data = await state.get_data()
-    
-#     # TODO: проверка на дубликаты
-#     # TODO: сохранение в БД
-    
-#     await callback.message.edit_text(
-#         MESSAGES["add-conf"]["saved-success"],
-#         reply_markup=generate_post_buttons()
-#     )
-    
     
 @router.callback_query(F.data == cb.CONFIRM_SAVE_CONF)
 async def confirm_save_conf(callback: CallbackQuery, state: FSMContext):
@@ -88,7 +79,9 @@ async def confirm_save_conf(callback: CallbackQuery, state: FSMContext):
 
     data = await state.get_data()
 
-    # сохранить в БД
+    # сохранить в БД     
+    # TODO: проверка на дубликаты
+    # TODO: сохранение в БД
 
     await callback.message.edit_text(
         MESSAGES["add-conf"]["saved-success"],
