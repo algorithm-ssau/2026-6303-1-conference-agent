@@ -4,6 +4,7 @@ class AddConference(StatesGroup):
   waiting_for_file = State()
   ocr_check = State()
   data_check = State()
+  confirm_save = State()
   hashtags = State()
   post = State()
   

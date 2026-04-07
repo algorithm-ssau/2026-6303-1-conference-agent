@@ -5,7 +5,7 @@ from aiogram.fsm.context import FSMContext
 from bot.core.constants import MESSAGES
 from bot.core.callbacks import TagCallback, FlowCallback
 from bot.core.states.states import AddConference
-from bot.core.keyboards import post_buttons,main_menu
+from bot.core.keyboards import post_buttons, main_menu
 from bot.services import ConferenceService, AdminService
 
 
