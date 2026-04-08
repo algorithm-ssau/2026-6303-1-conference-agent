@@ -1,14 +1,58 @@
 from typing import Dict, Any, List, Optional
 from bot.models.conference import Conference
-from bot.repositories.conference_repository import ConferenceRepository
 from bot.core.constants import MESSAGES
+from bot.database.db_manager import add_conference
+from bot.database import conference_repository
+from bot.services.parser.text_extractor import PDFTextExtractor
+from bot.services.parser.llm_service import OpenRouterProvider, GroqProvider, FallbackLLMParser
+from bot.services.parser.models import EventData
+from bot.config import OPENROUTER_API_KEY, GROQ_API_KEY, OPENROUTER_MODEL, GROQ_MODEL
+
 
 class ConferenceService:
   """
     Сервис для управления процессом создания конференции
   """
-
   
+
+  @staticmethod
+  async def parse_file(file_path: str) -> dict | None:
+      """
+      Обрабатывает PDF:
+      1. Извлекает текст (OCR при необходимости)
+      2. Прогоняет через LLM
+      3. Возвращает структурированные данные
+      """
+
+      extractor = PDFTextExtractor()
+
+      providers = [
+          GroqProvider(GROQ_API_KEY, GROQ_MODEL),
+          OpenRouterProvider(OPENROUTER_API_KEY, OPENROUTER_MODEL),
+      ]
+
+      parser = FallbackLLMParser(providers)
+
+      # 1. Извлекаем текст
+      raw_text = extractor.extract_text_smart(file_path)
+
+      if not raw_text.strip():
+          return None
+
+      # 2. Парсим через LLM
+      parsed = parser.parse(raw_text)
+
+      if not parsed:
+          return None
+
+      # 3. Валидируем через pydantic
+      try:
+          validated = EventData(**parsed)
+          return validated.model_dump()
+      except Exception as e:
+          print(f"Ошибка валидации: {e}")
+          return None
+    
   @staticmethod
   def get_default_tags() -> List[str]:
     return ["#ai", "#ml", "#science"]
@@ -96,6 +140,21 @@ class ConferenceService:
   
   @staticmethod
   async def create_conference(data: dict):
-      return await ConferenceRepository.create(data)
+      return await conference_repository.ConferenceRepository.create(data)
   
- 
+  @staticmethod
+  def format_parsed_data(data: dict) -> str:
+      return (
+          f"📌 Название: {data.get('event_name')}\n"
+          f"📅 Даты: {data.get('dates')}\n"
+          f"📍 Место: {data.get('location')}\n"
+      )
+      
+  @staticmethod
+  def save_to_db(data: dict):
+    return add_conference(
+      name=data.get("event_name"),
+      conference_date=data.get("dates"),
+      location=data.get("location"),
+      submission_deadline=None  # пока заглушка
+    )

@@ -1,6 +1,7 @@
 # bot/repositories/conference_repository.py
 
-from bot.repositories.db_manager import add_conference, search_conferences
+from bot.database.db_manager import add_conference, search_conferences
+# from bot.database.db_manager import Co
 
 class ConferenceRepository:
 

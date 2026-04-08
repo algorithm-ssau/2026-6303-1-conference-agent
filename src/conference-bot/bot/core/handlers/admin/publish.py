@@ -38,15 +38,43 @@ async def finish_tags(callback: CallbackQuery, state: FSMContext):
 async def publish(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
     
+    # 1. Достаем данные из FSM
     data = await state.get_data()
-    conference_data = data.get("conference_data")
+    # conference_data = data.get("conference_data")
+    parsed = data.get("parsed_data")
 
-    if conference_data:
-        await ConferenceService.create_conference(conference_data)
+    try:
+        # 2. Сохраняем в БД
+        if parsed:
+            await ConferenceService.save_to_db(parsed)
 
-    await state.clear()
+        # 3. (потом сюда можно воткнуть публикацию поста)
+        # await ConferenceService.publish_post(...)
 
-    await callback.message.edit_text(
-        MESSAGES["publish-post"]["success"],
-        reply_markup=main_menu(...)
-    )
+        # 4. Чистим состояние
+        await state.clear()
+
+        # 5. Ответ пользователю
+        await callback.message.edit_text(
+            MESSAGES["publish-post"]["success"],
+            reply_markup=main_menu(
+                AdminService.is_admin(callback.from_user.id)
+            )
+        )
+
+    except Exception as e:
+        await callback.message.edit_text(
+            f"❌ Ошибка при сохранении: {str(e)}",
+            reply_markup=main_menu(
+                AdminService.is_admin(callback.from_user.id)
+            )
+        )
+    # if conference_data:
+    #     await ConferenceService.create_conference(conference_data)
+
+    # await state.clear()
+
+    # await callback.message.edit_text(
+    #     MESSAGES["publish-post"]["success"],
+    #     reply_markup=main_menu(...)
+    # )

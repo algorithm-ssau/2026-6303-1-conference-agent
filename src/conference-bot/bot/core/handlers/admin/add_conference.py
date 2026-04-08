@@ -1,16 +1,21 @@
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
-
+from pathlib import Path
+# import uuid
 from bot.core.states.states import AddConference
 from bot.core.keyboards import back_button, ocr_buttons, data_buttons, hashtags_keyboard, post_edit_buttons, generate_post_buttons, confirm_conf_buttons
 from bot.core.constants import MESSAGES, callbacks as cb
 from bot.core.callbacks import AdminCallback, FlowCallback
-from bot.services import AdminService,ConferenceService
+from bot.services import AdminService, ConferenceService
 
+from bot.services.parser.parser_service import ParserService
 
+parser_service = ParserService()
 router = Router()
 
+BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
+TEMP_DIR = BASE_DIR / "temp"
 
 @router.callback_query(AdminCallback.filter(F.action == "add_conf"))
 async def add_conf(callback: CallbackQuery, state: FSMContext):
@@ -33,22 +38,68 @@ async def add_conf(callback: CallbackQuery, state: FSMContext):
 
 @router.message(AddConference.waiting_for_file)
 async def process_file(message: Message, state: FSMContext):
-    # заглушка
-    await state.update_data(
-        conference_data={
-            "name": "Test Conference",
-            "conference_date": "2026-06-01",
-            "location": "Berlin",
-            "submission_deadline": "2026-05-01"
-        }
-    )
-    # /заглушка
+     # 1. Проверяем, что прислали файл
+    if not message.document:
+        await message.answer(
+            "❌ Пожалуйста, отправьте PDF-файл с описанием конференции",
+            reply_markup=back_button()
+        )
+        return
     
-    await state.set_state(AddConference.ocr_check)
-    await message.answer(
-        MESSAGES["add-conf"]["ocr-stub"],
-        reply_markup=ocr_buttons()
-    )
+    TEMP_DIR.mkdir(exist_ok=True)
+    document = message.document
+    
+    file = await message.bot.get_file(document.file_id)
+    file_path = file.file_path
+    local_path = TEMP_DIR / document.file_name
+    # local_path = TEMP_DIR / f"{uuid.uuid4()}_{document.file_name}"
+
+    await message.bot.download_file(
+        file_path, 
+        destination=local_path)
+    await message.answer("📄 Файл получен. Распознаю текст...")
+
+    # data = parser_service.parse_pdf(file_path)
+
+    # if not data:
+    #     await message.answer("❌ Не удалось распознать данные")
+    #     return
+
+    # await state.update_data(parsed_data=data)
+    # await state.set_state(AddConference.ocr_check)
+    # await message.answer(
+    #     MESSAGES["add-conf"]["ocr-stub"]
+    # )
+    try:
+        # 4. Запускаем парсер
+        parsed_data = await ConferenceService.parse_file(local_path)
+
+        if not parsed_data:
+            await message.answer(
+                "❌ Не удалось извлечь данные из файла",
+                reply_markup=back_button()
+            )
+            return
+
+        # 5. Сохраняем в FSM
+        await state.update_data(parsed_data=parsed_data)
+
+        # 6. Форматируем для показа
+        text = ConferenceService.format_parsed_data(parsed_data)
+
+        # 7. Переход в следующий шаг
+        await state.set_state(AddConference.data_check)
+
+        await message.answer(
+            text,
+            reply_markup=data_buttons()
+        )
+
+    except Exception as e:
+        await message.answer(
+            f"❌ Ошибка при обработке файла: {str(e)}",
+            reply_markup=back_button()
+        )
 
 
 @router.callback_query(FlowCallback.filter(F.action == "ocr_ok"))
