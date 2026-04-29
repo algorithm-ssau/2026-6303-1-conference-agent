@@ -64,7 +64,7 @@ Telegram-бот с применением технологий искусств�
 ## 🚀 Как запустить
 ### 1. Клонирование репозитория
 ```bash
-git clone <ссылка-на-репозиторий>
+git clone https://github.com/algorithm-ssau/2026-6303-1-conference-agent
 cd 2026-6303-1-conference-agent
 ```
 
