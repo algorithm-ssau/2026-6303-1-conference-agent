@@ -6,8 +6,10 @@ from bot.database import conference_repository
 from bot.services.parser.text_extractor import PDFTextExtractor
 from bot.services.parser.llm_service import OpenRouterProvider, GroqProvider, FallbackLLMParser
 from bot.services.parser.models import EventData
-from bot.config import OPENROUTER_API_KEY, GROQ_API_KEY, OPENROUTER_MODEL, GROQ_MODEL
+from bot.config import OPENROUTER_API_KEY, GROQ_API_KEY, OPENROUTER_MODEL, GROQ_MODEL, DEEPSEEK_API_KEY
+from bot.services.post_service import PostService
 
+post_service = PostService(api_key=DEEPSEEK_API_KEY)
 
 class ConferenceService:
   """
@@ -106,10 +108,11 @@ class ConferenceService:
       Строит текст поста из черновика
     """
     selected_tags = draft.get("selected_tags", [])
-    
-    # заглушка
-    post_text = MESSAGES["stub-post"]["text"]
-    # /заглушка
+
+    post_text = post_service.generate_post(" ") # подгружать здесь текст конференции
+
+    # сделать обработку ошибки здесь
+
     
     formatted_post = (
       MESSAGES["publish-post"]["post-preview"]
