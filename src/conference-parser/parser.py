@@ -3,10 +3,17 @@ from config import OPENROUTER_API_KEY, OPENROUTER_MODEL, GROQ_API_KEY, GROQ_MODE
 from text_extractor import PDFTextExtractor
 from llm_service import OpenRouterProvider, GroqProvider, FallbackLLMParser
 from exporter import ExcelExporter
+from tagger import assign_hashtags
 
 
 class EventExtractionApp:
-    def __init__(self, folder_path="../pdfs"):
+    def __init__(self, folder_path=None):
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+
+        if folder_path is None:
+            folder_path = os.path.join(base_dir, "../pdfs")
+
+        self.folder_path = os.path.abspath(folder_path)
         self.folder_path = folder_path
         self.extractor = PDFTextExtractor()
 
@@ -35,6 +42,11 @@ class EventExtractionApp:
 
             if data:
                 data = self.exporter.postprocess_for_excel(data)
+                data["hashtags"] = assign_hashtags(
+                    event_name=data.get("event_name", ""),
+                    topics=data.get("topics", []),
+                    raw_text=raw_text
+                )
                 data["source_file"] = filename
                 all_results.append(data)
                 print(f"Готово: {data.get('event_name', 'Без названия')}")
