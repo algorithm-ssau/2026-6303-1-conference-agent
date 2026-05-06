@@ -8,73 +8,76 @@ from bot.core.states.states import AddConference
 from bot.core.keyboards import post_buttons, main_menu
 from bot.services import ConferenceService, AdminService
 
-
 router = Router()
 
 @router.callback_query(TagCallback.filter(F.action == "finish"))
 async def finish_tags(callback: CallbackQuery, state: FSMContext):
-    await callback.answer()
-    data = await state.get_data()
-    post_text = ConferenceService.build_post(data)
-    await state.update_data(post_text=post_text)
-    await state.set_state(AddConference.post)
-    await callback.message.edit_text(
-        post_text,
-        reply_markup=post_buttons(),
-        parse_mode="HTML"
-    )
+  """
+    Завершает выбор тегов.
 
+    - Генерирует финальный текст поста
+    - Сохраняет его в FSM
+    - Переводит в состояние предпросмотра поста
 
-# @router.callback_query(FlowCallback.filter(F.action == "publish"))
-# async def publish(callback: CallbackQuery, state: FSMContext):
-#     await callback.answer()
-#     await state.clear()
-#     await callback.message.edit_text(
-#         MESSAGES["publish-post"]["success"],
-#         reply_markup=main_menu(AdminService.is_admin(callback.from_user.id))
-#     )
+    :param callback: CallbackQuery
+    :param state: FSMContext
+  """
+  await callback.answer()
+  data = await state.get_data()
+  post_text = ConferenceService.build_post(data)
+  await state.update_data(post_text=post_text)
+  await state.set_state(AddConference.post)
+  await callback.message.edit_text(
+    post_text,
+    reply_markup=post_buttons(),
+    parse_mode="HTML"
+  )
+
 
 @router.callback_query(FlowCallback.filter(F.action == "publish"))
 async def publish(callback: CallbackQuery, state: FSMContext):
-    await callback.answer()
-    
-    # 1. Достаем данные из FSM
-    data = await state.get_data()
-    # conference_data = data.get("conference_data")
-    parsed = data.get("parsed_data")
+  """
+    Публикует конференцию.
 
-    try:
-        # 2. Сохраняем в БД
-        if parsed:
-            await ConferenceService.save_to_db(parsed)
+    - Получает данные из FSM
+    - Сохраняет конференцию в БД
+    - (в будущем) публикует пост
+    - Очищает FSM
+    - Возвращает пользователя в главное меню
 
-        # 3. (потом сюда можно воткнуть публикацию поста)
-        # await ConferenceService.publish_post(...)
+    :param callback: CallbackQuery
+    :param state: FSMContext
+  """
+  await callback.answer()
+  
+  # 1. Достаем данные из FSM
+  data = await state.get_data()
+  # conference_data = data.get("conference_data")
+  parsed = data.get("parsed_data")
 
-        # 4. Чистим состояние
-        await state.clear()
+  try:
+    # 2. Сохраняем в БД
+    if parsed:
+      ConferenceService.save_to_db(parsed)
 
-        # 5. Ответ пользователю
-        await callback.message.edit_text(
-            MESSAGES["publish-post"]["success"],
-            reply_markup=main_menu(
-                AdminService.is_admin(callback.from_user.id)
-            )
-        )
+    # 3. (потом сюда можно воткнуть публикацию поста)
+    # await ConferenceService.publish_post(...)
 
-    except Exception as e:
-        await callback.message.edit_text(
-            f"❌ Ошибка при сохранении: {str(e)}",
-            reply_markup=main_menu(
-                AdminService.is_admin(callback.from_user.id)
-            )
-        )
-    # if conference_data:
-    #     await ConferenceService.create_conference(conference_data)
+    # 4. Чистим состояние
+    await state.clear()
 
-    # await state.clear()
+    # 5. Ответ пользователю
+    await callback.message.edit_text(
+      MESSAGES["publish-post"]["success"],
+      reply_markup=main_menu(
+        AdminService.is_admin(callback.from_user.id)
+      )
+    )
 
-    # await callback.message.edit_text(
-    #     MESSAGES["publish-post"]["success"],
-    #     reply_markup=main_menu(...)
-    # )
+  except Exception as e:
+    await callback.message.edit_text(
+      f"❌ Ошибка при сохранении: {str(e)}",
+      reply_markup=main_menu(
+          AdminService.is_admin(callback.from_user.id)
+      )
+    )

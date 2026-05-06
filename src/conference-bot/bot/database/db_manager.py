@@ -4,7 +4,15 @@ import sqlite3
 DB_PATH = 'conferences.db'
 
 def add_conference(name, conference_date, location, submission_deadline):
-    """Добавить новую конференцию"""
+    """
+      Добавляет новую конференцию в базу данных.
+
+      :param name: Название конференции
+      :param conference_date: Дата проведения (YYYY-MM-DD)
+      :param location: Место проведения
+      :param submission_deadline: Дедлайн подачи заявок (YYYY-MM-DD)
+      :return: ID добавленной записи
+    """
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''
@@ -16,7 +24,12 @@ def add_conference(name, conference_date, location, submission_deadline):
     return cursor.lastrowid
 
 def search_conferences(query):
-    """Поиск по названию (или части названия)"""
+    """
+      Выполняет поиск конференций по части названия.
+
+      :param query: Строка поиска
+      :return: Список кортежей с конференциями (только неархивированные)
+    """
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''
@@ -29,7 +42,11 @@ def search_conferences(query):
     return results
 
 def get_active_conferences():
-    """Получить все активные конференции (сортировка по дате)"""
+    """
+      Возвращает все актуальные (неархивированные) конференции.
+
+      :return: Список конференций, отсортированных по дате
+    """
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''
@@ -42,7 +59,11 @@ def get_active_conferences():
     return results
 
 def archive_past_conferences():
-    """Архивировать конференции, которые уже прошли"""
+    """
+      Помечает прошедшие конференции как архивные.
+
+      :return: Количество обновленных записей
+    """
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''

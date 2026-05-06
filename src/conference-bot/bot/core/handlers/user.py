@@ -11,8 +11,19 @@ router = Router()
 search_service = SearchService()
 
 
+"""
+
+"""
 @router.message(F.text == "/start")
 async def start(message: Message):
+  """
+    Обработчик команды /start.
+
+    - Отправляет приветственное сообщение
+    - Показывает главное меню (с учётом роли пользователя)
+
+    :param message: Message
+  """
   await message.answer(
     MESSAGES["main-menu"]["start-msg"],
     reply_markup=main_menu(AdminService.is_admin(message.from_user.id))
@@ -21,6 +32,15 @@ async def start(message: Message):
 
 @router.callback_query(F.data == cb.SEARCH)
 async def search(callback: CallbackQuery, state: FSMContext):
+  """
+    Инициирует поиск конференций.
+
+    - Переводит FSM в состояние ожидания запроса
+    - Просит пользователя ввести тему поиска
+
+    :param callback: CallbackQuery
+    :param state: FSMContext
+  """
   await state.set_state(Search.waiting_query)
   await callback.message.edit_text(
     MESSAGES["search-conf"]["enter-topic"],
@@ -30,6 +50,17 @@ async def search(callback: CallbackQuery, state: FSMContext):
 
 @router.message(Search.waiting_query)
 async def process_search(message: Message, state: FSMContext):
+  """
+    Обрабатывает поисковый запрос пользователя.
+
+    - Валидирует ввод
+    - Выполняет поиск через SearchService
+    - Сохраняет данные пагинации в FSM
+    - Отправляет первые результаты
+
+    :param message: Message с текстом запроса
+    :param state: FSMContext
+  """
   query = message.text.strip()
   
   if not query:
@@ -58,6 +89,17 @@ async def process_search(message: Message, state: FSMContext):
   
 @router.callback_query(F.data.startswith(cb.MORE))
 async def show_more(callback: CallbackQuery, state: FSMContext):
+  """
+    Загружает следующую страницу результатов поиска.
+
+    - Извлекает offset из callback
+    - Выполняет повторный поиск
+    - Обновляет сообщение с результатами
+    - Обновляет кнопки пагинации
+
+    :param callback: CallbackQuery
+    :param state: FSMContext
+  """
   await callback.answer()
   
   try:

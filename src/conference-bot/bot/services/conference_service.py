@@ -19,41 +19,41 @@ class ConferenceService:
 
   @staticmethod
   async def parse_file(file_path: str) -> dict | None:
-      """
-      Обрабатывает PDF:
-      1. Извлекает текст (OCR при необходимости)
-      2. Прогоняет через LLM
-      3. Возвращает структурированные данные
-      """
+    """
+    Обрабатывает PDF:
+    1. Извлекает текст (OCR при необходимости)
+    2. Прогоняет через LLM
+    3. Возвращает структурированные данные
+    """
 
-      extractor = PDFTextExtractor()
+    extractor = PDFTextExtractor()
 
-      providers = [
-          GroqProvider(GROQ_API_KEY, GROQ_MODEL),
-          OpenRouterProvider(OPENROUTER_API_KEY, OPENROUTER_MODEL),
-      ]
+    providers = [
+      GroqProvider(GROQ_API_KEY, GROQ_MODEL),
+      OpenRouterProvider(OPENROUTER_API_KEY, OPENROUTER_MODEL),
+    ]
 
-      parser = FallbackLLMParser(providers)
+    parser = FallbackLLMParser(providers)
 
-      # 1. Извлекаем текст
-      raw_text = extractor.extract_text_smart(file_path)
+    # 1. Извлекаем текст
+    raw_text = extractor.extract_text_smart(file_path)
 
-      if not raw_text.strip():
-          return None
+    if not raw_text.strip():
+      return None
 
-      # 2. Парсим через LLM
-      parsed = parser.parse(raw_text)
+    # 2. Парсим через LLM
+    parsed = parser.parse(raw_text)
 
-      if not parsed:
-          return None
+    if not parsed:
+      return None
 
-      # 3. Валидируем через pydantic
-      try:
-          validated = EventData(**parsed)
-          return validated.model_dump()
-      except Exception as e:
-          print(f"Ошибка валидации: {e}")
-          return None
+    # 3. Валидируем через pydantic
+    try:
+      validated = EventData(**parsed)
+      return validated.model_dump()
+    except Exception as e:
+      print(f"Ошибка валидации: {e}")
+      return None
     
   @staticmethod
   def get_default_tags() -> List[str]:
@@ -108,8 +108,18 @@ class ConferenceService:
       Строит текст поста из черновика
     """
     selected_tags = draft.get("selected_tags", [])
+    
+    parsed = draft.get("parsed_data", {})
+    text = f"""
+Название: {parsed.get('event_name')}
+Даты: {parsed.get('dates')}
+Место: {parsed.get('location')}
+"""
 
     post_text = post_service.generate_post(" ") # подгружать здесь текст конференции
+
+    if not post_text:
+      return "❌ Не удалось сгенерировать пост"
 
     # сделать обработку ошибки здесь
 
@@ -137,21 +147,19 @@ class ConferenceService:
     
     return True
   
-  '''
-    Добавление конференции в БД
-  '''
+  """Добавление конференции в БД"""
   
   @staticmethod
   async def create_conference(data: dict):
-      return await conference_repository.ConferenceRepository.create(data)
+    return await conference_repository.ConferenceRepository.create(data)
   
   @staticmethod
   def format_parsed_data(data: dict) -> str:
-      return (
-          f"📌 Название: {data.get('event_name')}\n"
-          f"📅 Даты: {data.get('dates')}\n"
-          f"📍 Место: {data.get('location')}\n"
-      )
+    return (
+      f"📌 Название: {data.get('event_name')}\n"
+      f"📅 Даты: {data.get('dates')}\n"
+      f"📍 Место: {data.get('location')}\n"
+    )
       
   @staticmethod
   def save_to_db(data: dict):

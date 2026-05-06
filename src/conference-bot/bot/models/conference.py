@@ -15,7 +15,9 @@ class Conference:
   file_id: Optional[str] = None # идентификатор в базе данных
   
   def to_post_text(self) -> str:
-    """Форматирование в текст поста"""
+    """
+      Форматирование в текст поста
+    """
     tags_str = " ".join(self.tags) if self.tags else ""
     return (
       f"<b>{self.title}</b>\n\n"
