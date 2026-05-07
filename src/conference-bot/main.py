@@ -22,7 +22,7 @@ async def on_shutdown():
 
 
 async def main():
-  timeout = 15
+  timeout = 60
   custom_server = TelegramAPIServer.from_base(PROXY_URL)
   session = AiohttpSession(api=custom_server, timeout=timeout)
   

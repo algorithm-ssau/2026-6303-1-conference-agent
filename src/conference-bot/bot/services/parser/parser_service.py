@@ -14,6 +14,6 @@ class ParserService:
 
     self.parser = FallbackLLMParser(providers)
 
-  def parse_pdf(self, file_path: str) -> dict | None:
+  async def parse_pdf(self, file_path: str) -> dict | None:
     text = self.extractor.extract_text_smart(file_path)
-    return self.parser.parse(text)
+    return await self.parser.parse(text)

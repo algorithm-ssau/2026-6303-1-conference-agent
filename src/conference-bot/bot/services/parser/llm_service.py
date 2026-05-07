@@ -1,5 +1,6 @@
 import json
-import requests
+# import requests
+import aiohttp
 from abc import ABC, abstractmethod
 import logging
 from .models import EventData
@@ -11,7 +12,7 @@ class LLMProvider(ABC):
     Определяет интерфейс метода parse().
   """
   @abstractmethod
-  def parse(self, text: str, schema: dict) -> dict:
+  async def parse(self, text: str, schema: dict) -> dict:
     '''
       Должен быть реализован в наследниках.
       Выполняет парсинг текста в структуру по schema.
@@ -46,7 +47,7 @@ class OpenRouterProvider(LLMProvider):
     self.model = model
     self.url = "https://openrouter.ai/api/v1/chat/completions"
 
-  def parse(self, text: str, schema: dict) -> dict:
+  async def parse(self, text: str, schema: dict) -> dict:
     """
     Отправляет текст в OpenRouter и получает структурированный JSON.
 
@@ -66,11 +67,33 @@ class OpenRouterProvider(LLMProvider):
       "response_format": {"type": "json_object"},
       "temperature": 0.1
     }
+    async with aiohttp.ClientSession() as session:
+      async with session.post(
+          self.url,
+          headers=headers,
+          json=payload,
+          timeout=aiohttp.ClientTimeout(total=60)
+      ) as response:
 
-    response = requests.post(self.url, headers=headers, json=payload, timeout=60)
-    response.raise_for_status()
-    data = response.json()
-    return json.loads(data["choices"][0]["message"]["content"])
+          response.raise_for_status()
+
+          data = await response.json()
+
+          return json.loads(
+              data["choices"][0]["message"]["content"]
+          )
+
+    # response = requests.post(
+    #   self.url, 
+    #   headers=headers, 
+    #   json=payload, 
+    #   timeout=60
+    
+    # )
+    # response.raise_for_status()
+    # data = response.json()
+    
+    # return json.loads(data["choices"][0]["message"]["content"])
 
 
 class GroqProvider(LLMProvider):
@@ -82,7 +105,7 @@ class GroqProvider(LLMProvider):
     self.model = model
     self.url = "https://api.groq.com/openai/v1/chat/completions"
 
-  def parse(self, text: str, schema: dict) -> dict:
+  async def parse(self, text: str, schema: dict) -> dict:
     """
       Аналогично OpenRouter, но через Groq API.
     """
@@ -101,10 +124,25 @@ class GroqProvider(LLMProvider):
       "temperature": 0.1
     }
 
-    response = requests.post(self.url, headers=headers, json=payload, timeout=60)
-    response.raise_for_status()
-    data = response.json()
-    return json.loads(data["choices"][0]["message"]["content"])
+    # response = aiohttp.post(self.url, headers=headers, json=payload, timeout=60)
+    # response.raise_for_status()
+    # data = response.json()
+    # return json.loads(data["choices"][0]["message"]["content"])
+    async with aiohttp.ClientSession() as session:
+      async with session.post(
+        self.url,
+        headers=headers,
+        json=payload,
+        timeout=aiohttp.ClientTimeout(total=60)
+      ) as response:
+
+        response.raise_for_status()
+
+        data = await response.json()
+
+        return json.loads(
+          data["choices"][0]["message"]["content"]
+        )
 
 
 class FallbackLLMParser:
@@ -115,7 +153,7 @@ class FallbackLLMParser:
   def __init__(self, providers: list[LLMProvider]):
     self.providers = providers
 
-  def parse(self, text: str):
+  async def parse(self, text: str):
     """
       Пытается распарсить текст через список провайдеров.
 
@@ -130,7 +168,7 @@ class FallbackLLMParser:
 
     for provider in self.providers:
       try:
-        return provider.parse(text, schema)
+        return await provider.parse(text, schema)
       except Exception as e:
         last_error = e
         logging.error("Ошибка у {provider.__class__.__name__}: {e}")

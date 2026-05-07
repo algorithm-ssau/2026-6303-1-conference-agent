@@ -42,7 +42,7 @@ class ConferenceService:
       return None
 
     # 2. Парсим через LLM
-    parsed = parser.parse(raw_text)
+    parsed = await parser.parse(raw_text)
 
     if not parsed:
       return None
@@ -103,7 +103,7 @@ class ConferenceService:
   
   
   @staticmethod
-  def build_post(draft: Dict[str, Any]) -> str:
+  async def build_post(draft: Dict[str, Any]) -> str:
     """
       Строит текст поста из черновика
     """
@@ -117,7 +117,7 @@ class ConferenceService:
 """
 
     raw = draft.get("raw_text", "")
-    post_text = post_service.generate_post(raw)
+    post_text = await post_service.generate_post(raw)
     
     if not post_text:
       return "❌ Не удалось сгенерировать пост"
@@ -169,3 +169,13 @@ class ConferenceService:
       location=data.get("location"),
       submission_deadline=None  # пока заглушка
     )
+  @staticmethod
+  async def parse_text(text: str):
+    providers = [
+        GroqProvider(GROQ_API_KEY, GROQ_MODEL),
+        OpenRouterProvider(OPENROUTER_API_KEY, OPENROUTER_MODEL),
+    ]
+
+    parser = FallbackLLMParser(providers)
+
+    return await parser.parse(text)

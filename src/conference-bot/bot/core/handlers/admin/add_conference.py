@@ -161,7 +161,7 @@ async def data_ok(callback: CallbackQuery, state: FSMContext):
   data = await state.get_data()
 
   await callback.message.edit_text("✍️ Генерирую пост...")
-  post_text = ConferenceService.build_post(data)
+  post_text = await ConferenceService.build_post(data)
 
   await state.update_data(post_text=post_text)
   await state.set_state(AddConference.post_check)
@@ -214,7 +214,7 @@ async def generate_post(callback: CallbackQuery, state: FSMContext):
   await callback.answer()
   
   data = await state.get_data()
-  post_text = ConferenceService.build_post(data)
+  post_text = await ConferenceService.build_post(data)
   
   await state.update_data(post_text=post_text)
   await state.set_state(AddConference.post)

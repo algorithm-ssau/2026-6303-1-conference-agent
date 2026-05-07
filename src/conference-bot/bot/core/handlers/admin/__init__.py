@@ -1,5 +1,6 @@
 from aiogram import Router
-from bot.core.handlers.admin import add_conference, hashtags, publish, add_admin, cancel_anywhere
+from bot.core.handlers.admin import add_conference, hashtags, publish, add_admin
+from . import common
 
 def get_admin_router():
   router = Router()
@@ -8,5 +9,6 @@ def get_admin_router():
   router.include_router(hashtags.router)
   router.include_router(publish.router)
   router.include_router(add_admin.router)
+  router.include_router(common.router)
 
   return router

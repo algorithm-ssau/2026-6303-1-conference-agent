@@ -2,6 +2,7 @@ from typing import Dict, Any, List
 from bot.config import ADMIN_IDS
 from bot.core.constants import MESSAGES
 from bot.database import AdminRepository
+import re
 
 class AdminService:
   """
@@ -62,5 +63,11 @@ class AdminService:
     
     if username.startswith("@"):
       username = username[1:]
+        
+    if len(username) < 5 or len(username) > 32:
+      return False
+        
+    if not re.match(r'^[a-zA-Z0-9][a-zA-Z0-9_]+$', username):
+      return False
       
-    return username.isalnum() and len(username) >= 3
+    return len(username) >= 3

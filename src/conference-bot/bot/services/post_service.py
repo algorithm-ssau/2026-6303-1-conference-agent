@@ -1,4 +1,5 @@
-import requests
+# import requests
+import aiohttp
 from typing import Optional, Dict
 
 
@@ -14,7 +15,7 @@ class PostService:
         "Content-Type": "application/json"
       }
 
-    def generate_post(
+    async def generate_post(
         self,
         text: str,
         template: str = "default",
@@ -85,19 +86,23 @@ class PostService:
         }
 
         try:
-          response = requests.post(
-            self.url,
-            headers=self.headers,
-            json=payload,
-            timeout=60
-          )
+          async with aiohttp.ClientSession() as session:
+            async with session.post(
+                self.url,
+                headers=self.headers,
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=60)
+            ) as response:
+          
+              response.raise_for_status()
+              
+              if response.status_code != 200:
+                print(f"DeepSeek API error: {response.status_code}")
+                return None
+              
+              data = await response.json()
+              return data["choices"][0]["message"]["content"]
 
-          if response.status_code != 200:
-            print(f"DeepSeek API error: {response.status_code}")
-            return None
-
-          data = response.json()
-          return data["choices"][0]["message"]["content"]
 
         except Exception as e:
           print(f"Ошибка генерации поста: {e}")
