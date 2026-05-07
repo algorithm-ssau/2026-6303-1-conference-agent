@@ -3,7 +3,7 @@ from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
 
 from bot.core.states.states import AddAdmin
-from bot.core.keyboards import back_button, confirmation_buttons
+from bot.core.keyboards import back_button, confirmation_buttons, main_menu
 from bot.core.constants import MESSAGES, callbacks as cb
 from bot.core.callbacks import AdminCallback
 from bot.services import AdminService
@@ -27,7 +27,10 @@ async def add_admin(callback: CallbackQuery, state: FSMContext):
     :param callback: CallbackQuery от нажатия кнопки "Добавить администратора"
     :param state: FSMContext для управления состоянием пользователя
   """
-  if not AdminService.is_admin(callback.from_user.id):
+  if not AdminService.is_admin(
+    callback.from_user.id,
+    callback.from_user.username
+    ):
     await callback.answer(
       MESSAGES["errors"]["for-admin-only"], 
       show_alert=True
@@ -60,11 +63,21 @@ async def process_admin(message: Message, state: FSMContext):
     :param message: Сообщение пользователя с username
     :param state: FSMContext с данными процесса
   """
-  username = message.text.strip()
+  username_raw = message.text or ""
+  username = normalize_username(username_raw)
+
   
   if not AdminService.validate_username(username):
     await message.answer(
       MESSAGES["add-admin"]["invalid-input"],
+      reply_markup=back_button()
+    )
+    return
+  
+  # вынести сообщение в месседжес
+  if username in [str(x) for x in AdminService.get_admins()]:
+    await message.answer(
+      "⚠️ Этот пользователь уже администратор",
       reply_markup=back_button()
     )
     return
@@ -108,6 +121,7 @@ async def confirm_add_admin(callback: CallbackQuery, state: FSMContext):
       MESSAGES["errors"]["tg-user-not-found"],
       reply_markup=back_button()
     )
+    await state.clear()
     return
   
   try:
@@ -116,14 +130,26 @@ async def confirm_add_admin(callback: CallbackQuery, state: FSMContext):
       added_by=callback.from_user.id
     )
     
-    if result.get("success"):
-      await callback.message.edit_text(
-        MESSAGES["add-admin"]["success"],
-        reply_markup=back_button()
-      ) 
+    if not result.get("success"):
+      if result.get("reason") == "already_exists":
+        await callback.message.edit_text(
+          f"⚠️ @{username} уже администратор",
+          reply_markup=back_button()
+        )
+        return
+    
+    await callback.message.edit_text(
+      f"✅ @{username} теперь администратор",
+      reply_markup=main_menu(True)
+    )
+    
+  except PermissionError:
+    await callback.message.edit_text(
+      MESSAGES["errors"]["for-admin-only"],
+      reply_markup=back_button()
+    )
       
-  except Exception as e:
-    # logging.error(e)
+  except Exception:
     await callback.message.edit_text(
       MESSAGES["errors"]["default"],
       reply_markup=back_button()
@@ -131,23 +157,10 @@ async def confirm_add_admin(callback: CallbackQuery, state: FSMContext):
       
   await state.clear()
 
-
-@router.callback_query(F.data == cb.CANCEL_ADD_ADMIN)
-async def cancel_add_admin(callback: CallbackQuery, state: FSMContext):
-  """
-    Отменяет процесс добавления администратора.
-
-    - Очищает состояние FSM
-    - Отправляет сообщение об отмене операции
-
-    :param callback: CallbackQuery от кнопки отмены
-    :param state: FSMContext
-  """
-  await callback.answer()
-  await state.clear()
-  await callback.message.edit_text(
-    MESSAGES["add-admin"]["cancel"],
-    reply_markup=back_button()
-  )
-
+# перенести потом в утилиту
+def normalize_username(username: str) -> str:
+  username = username.strip()
+  if username.startswith("@"):
+    username = username[1:]
+  return username.lower()
     

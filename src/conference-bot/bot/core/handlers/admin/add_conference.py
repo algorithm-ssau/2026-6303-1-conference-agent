@@ -4,9 +4,10 @@ from aiogram.fsm.context import FSMContext
 from pathlib import Path
 # import uuid
 from bot.core.states.states import AddConference
-from bot.core.keyboards import back_button, ocr_buttons, data_buttons, hashtags_keyboard, post_edit_buttons, generate_post_buttons, confirm_conf_buttons
+from bot.core.keyboards import back_button, ocr_buttons, data_buttons, hashtags_keyboard, post_edit_buttons, generate_post_buttons, confirm_conf_buttons, main_menu
 from bot.core.constants import MESSAGES, callbacks as cb
 from bot.core.callbacks import AdminCallback, FlowCallback
+from bot.services.parser import PDFTextExtractor
 from bot.services import AdminService, ConferenceService
 
 from bot.services.parser.parser_service import ParserService
@@ -30,7 +31,10 @@ async def add_conf(callback: CallbackQuery, state: FSMContext):
     :param callback: CallbackQuery
     :param state: FSMContext
   """
-  if not AdminService.is_admin(callback.from_user.id):
+  if not AdminService.is_admin(
+    callback.from_user.id,
+    callback.from_user.username
+  ):
     await callback.answer(
       MESSAGES["errors"]["for-admin-only"], 
       show_alert=True
@@ -75,43 +79,28 @@ async def process_file(message: Message, state: FSMContext):
     return
   
   TEMP_DIR.mkdir(exist_ok=True)
-  document = message.document
   
-  file = await message.bot.get_file(document.file_id)
-  file_path = file.file_path
-  local_path = TEMP_DIR / document.file_name
-  # local_path = TEMP_DIR / f"{uuid.uuid4()}_{document.file_name}"
-
-  await message.bot.download_file(
-    file_path, 
-    destination=local_path)
-
-  await message.answer("📄 Файл получен. Распознаю текст...")
+  file = await message.bot.get_file(message.document.file_id)
+  local_path = TEMP_DIR / message.document.file_name
+  
+  await message.bot.download_file(file.file_path, local_path)
+  await message.answer("📄 Файл получен. Извлекаю текст...")
 
   try:
-    # 4. Запускаем парсер
-    # parsed_data = await ConferenceService.parse_file(local_path)
-    parsed_data = await ConferenceService.parse_file(str(local_path))
+    extractor = PDFTextExtractor()
+    text = extractor.extract_text_smart(str(local_path))
 
-    if not parsed_data:
-      await message.answer(
-        "❌ Не удалось извлечь данные из файла",
-        reply_markup=back_button()
-      )
+    if not text.strip():
+      await message.answer("❌ Не удалось извлечь текст")
       return
 
-    # 5. Сохраняем в FSM
-    await state.update_data(parsed_data=parsed_data)
+    await state.update_data(raw_text=text[:4000])  # ограничим
 
-    # 6. Форматируем для показа
-    text = ConferenceService.format_parsed_data(parsed_data)
-
-    # 7. Переход в следующий шаг
-    await state.set_state(AddConference.data_check)
+    await state.set_state(AddConference.text_check)
 
     await message.answer(
-      text,
-      reply_markup=data_buttons()
+      f"📄 Проверь текст:\n\n<blockquote>{text[:1000]}</blockquote>",
+      reply_markup=ocr_buttons()
     )
 
   except Exception as e:
@@ -136,13 +125,25 @@ async def ocr_ok(callback: CallbackQuery, state: FSMContext):
     :param state: FSMContext
   """
   await callback.answer()
-  await state.set_state(AddConference.data_check)
-  await callback.message.edit_text(
-    MESSAGES["add-conf"]["main-info_stub"],
-    reply_markup=data_buttons(),
-    parse_mode="HTML"
-  )
 
+  data = await state.get_data()
+  text = data.get("raw_text")
+
+  await callback.message.edit_text("🔍 Парсю данные...")
+
+  parsed = await ConferenceService.parse_text(text)
+
+  if not parsed:
+    await callback.message.edit_text("❌ Ошибка парсинга")
+    return
+
+  await state.update_data(parsed_data=parsed)
+  await state.set_state(AddConference.data_check)
+
+  await callback.message.edit_text(
+    ConferenceService.format_parsed_data(parsed),
+    reply_markup=data_buttons()
+  )
 
 @router.callback_query(FlowCallback.filter(F.action == "data_ok"))
 async def data_ok(callback: CallbackQuery, state: FSMContext):
@@ -157,12 +158,17 @@ async def data_ok(callback: CallbackQuery, state: FSMContext):
     :param state: FSMContext
   """
   await callback.answer()
-  tags = ConferenceService.get_default_tags()
-  await state.update_data(available_tags=tags, selected_tags=[])
-  await state.set_state(AddConference.confirm_save)
+  data = await state.get_data()
+
+  await callback.message.edit_text("✍️ Генерирую пост...")
+  post_text = ConferenceService.build_post(data)
+
+  await state.update_data(post_text=post_text)
+  await state.set_state(AddConference.post_check)
+
   await callback.message.edit_text(
-    MESSAGES["add-conf"]["confirm-save"],
-    reply_markup = confirm_conf_buttons()
+    post_text,
+    reply_markup=post_edit_buttons()
   )
     
 @router.callback_query(F.data == cb.CONFIRM_SAVE_CONF)
@@ -250,12 +256,26 @@ async def to_tags(callback: CallbackQuery, state: FSMContext):
     :param state: FSMContext
   """
   await callback.answer()
-  
+
   tags = ConferenceService.get_default_tags()
+
   await state.update_data(available_tags=tags, selected_tags=[])
   await state.set_state(AddConference.hashtags)
-  
   await callback.message.edit_text(
-    MESSAGES["add-conf"]["add-tags"],
+    "Выбери теги:",
     reply_markup=hashtags_keyboard(tags, [])
+  )
+  
+@router.callback_query(F.data == cb.MAIN_MENU)
+async def cancel_anywhere(callback: CallbackQuery, state: FSMContext):
+  await state.clear()
+
+  await callback.message.edit_text(
+    "Действие отменено",
+    reply_markup=main_menu(
+      AdminService.is_admin(
+        callback.from_user.id,
+        callback.from_user.username
+      )
+    )
   )

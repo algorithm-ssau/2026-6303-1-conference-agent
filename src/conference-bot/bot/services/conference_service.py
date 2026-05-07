@@ -116,14 +116,14 @@ class ConferenceService:
 Место: {parsed.get('location')}
 """
 
-    post_text = post_service.generate_post(" ") # подгружать здесь текст конференции
-
+    raw = draft.get("raw_text", "")
+    post_text = post_service.generate_post(raw)
+    
     if not post_text:
       return "❌ Не удалось сгенерировать пост"
 
     # сделать обработку ошибки здесь
 
-    
     formatted_post = (
       MESSAGES["publish-post"]["post-preview"]
       + "<blockquote>" + post_text + "</blockquote>"

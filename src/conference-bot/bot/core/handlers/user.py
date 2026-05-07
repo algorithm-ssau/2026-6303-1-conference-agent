@@ -10,10 +10,6 @@ from bot.services import AdminService,SearchService
 router = Router()
 search_service = SearchService()
 
-
-"""
-
-"""
 @router.message(F.text == "/start")
 async def start(message: Message):
   """

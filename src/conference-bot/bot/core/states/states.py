@@ -2,11 +2,14 @@ from aiogram.fsm.state import State, StatesGroup
 
 class AddConference(StatesGroup):
   waiting_for_file = State()
-  ocr_check = State()
-  data_check = State()
-  confirm_save = State()
+  text_check = State() # после OCR
+  data_check = State() 
+  post_check = State() # подтверждение текста поста
   hashtags = State()
-  post = State()
+  preview = State() # финальный просмотр
+  # ocr_check = State()
+  # confirm_save = State()
+  # post = State()
   
 class AddAdmin(StatesGroup):
   waiting_user_name = State()

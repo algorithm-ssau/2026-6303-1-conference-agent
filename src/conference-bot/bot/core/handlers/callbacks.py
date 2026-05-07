@@ -40,3 +40,4 @@ async def about_handler(callback: CallbackQuery):
     reply_markup=back_button()
   )
 
+

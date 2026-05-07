@@ -18,5 +18,16 @@ def init_db():
       is_archived INTEGER DEFAULT 0
     )
   ''')
+  
+    # 🔥 НОВОЕ
+  cursor.execute('''
+    CREATE TABLE IF NOT EXISTS admins (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      added_by INTEGER,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  ''')
+  
   conn.commit()
   conn.close()
