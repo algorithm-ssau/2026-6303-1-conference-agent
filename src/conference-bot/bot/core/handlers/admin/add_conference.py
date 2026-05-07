@@ -2,6 +2,7 @@ from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
 from pathlib import Path
+from html import escape
 # import uuid
 from bot.core.states.states import AddConference
 from bot.core.keyboards import back_button, ocr_buttons, data_buttons, hashtags_keyboard, post_edit_buttons, generate_post_buttons, confirm_conf_buttons, main_menu
@@ -98,8 +99,10 @@ async def process_file(message: Message, state: FSMContext):
 
     await state.set_state(AddConference.text_check)
 
+    safe_text = escape(text[:1000])
+
     await message.answer(
-      f"📄 Проверь текст:\n\n<blockquote>{text[:1000]}</blockquote>",
+      f"📄 Проверь текст:\n\n<blockquote>{safe_text}</blockquote>",
       reply_markup=ocr_buttons()
     )
 
@@ -257,7 +260,7 @@ async def to_tags(callback: CallbackQuery, state: FSMContext):
   """
   await callback.answer()
 
-  tags = ConferenceService.get_default_tags()
+  tags = await ConferenceService.get_default_tags()
 
   await state.update_data(available_tags=tags, selected_tags=[])
   await state.set_state(AddConference.hashtags)

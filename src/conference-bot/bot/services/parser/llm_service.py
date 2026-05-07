@@ -1,5 +1,4 @@
 import json
-# import requests
 import aiohttp
 from abc import ABC, abstractmethod
 import logging
@@ -42,9 +41,9 @@ class OpenRouterProvider(LLMProvider):
   """
     Реализация LLM через OpenRouter API.
   """
-  def __init__(self, api_key: str, model: str):
+  def __init__(self, api_key: str, models: list[str]):
     self.api_key = api_key
-    self.model = model
+    self.models = models
     self.url = "https://openrouter.ai/api/v1/chat/completions"
 
   async def parse(self, text: str, schema: dict) -> dict:
@@ -58,51 +57,68 @@ class OpenRouterProvider(LLMProvider):
       "Authorization": f"Bearer {self.api_key}",
       "Content-Type": "application/json"
     }
-    payload = {
-      "model": self.model,
-      "messages": [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": f"Текст для анализа: \n{text}"}
-      ],
-      "response_format": {"type": "json_object"},
-      "temperature": 0.1
-    }
-    async with aiohttp.ClientSession() as session:
-      async with session.post(
-          self.url,
-          headers=headers,
-          json=payload,
-          timeout=aiohttp.ClientTimeout(total=60)
-      ) as response:
+    for model in self.models:
+      payload = {
+        "model": model,
+        "messages": [
+          {"role": "system", "content": system_prompt},
+          {"role": "user", "content": f"Текст:\n{text}"}
+        ],
+        "response_format": {"type": "json_object"},
+        "temperature": 0.1
+      }
 
-          response.raise_for_status()
+      try:
+        logging.info(f"➡ OpenRouter: пробую {model}")
 
-          data = await response.json()
+        # В llm_service.py, перед отправкой запроса:
+        logging.info(f"📤 Отправляю в LLM текст длиной: {len(text)} символов")
+        logging.debug(f"📄 Первые 500 символов текста:\n{text[:500]}")
 
-          return json.loads(
-              data["choices"][0]["message"]["content"]
-          )
+        async with aiohttp.ClientSession() as session:
+          async with session.post(
+            self.url,
+            headers=headers,
+            json=payload,
+            timeout=aiohttp.ClientTimeout(total=60)
+          ) as response:
 
-    # response = requests.post(
-    #   self.url, 
-    #   headers=headers, 
-    #   json=payload, 
-    #   timeout=60
-    
-    # )
-    # response.raise_for_status()
-    # data = response.json()
-    
-    # return json.loads(data["choices"][0]["message"]["content"])
+              if response.status != 200:
+                text = await response.text()
+                logging.error(f"""
+            ❌ API ERROR
+            Provider: OpenRouter
+            Model: {model}
+            Status: {response.status}
+            Response: {text[:500]}
+            """)
+                continue
+
+              data = await response.json()
+
+              try:
+                content = data["choices"][0]["message"]["content"]
+                parsed = json.loads(content)
+                logging.debug(f"RAW LLM RESPONSE: {content[:1000]}")
+                return parsed
+              except Exception:
+                logging.error(f"{model} вернул кривой JSON")
+                continue
+
+      except Exception as e:
+        logging.error(f"{model} упал: {e}")
+        continue
+
+    return None
 
 
 class GroqProvider(LLMProvider):
   """
     Реализация LLM через Groq API.
   """
-  def __init__(self, api_key: str, model: str):
+  def __init__(self, api_key: str, models: list[str]):
     self.api_key = api_key
-    self.model = model
+    self.models = models
     self.url = "https://api.groq.com/openai/v1/chat/completions"
 
   async def parse(self, text: str, schema: dict) -> dict:
@@ -114,35 +130,55 @@ class GroqProvider(LLMProvider):
       "Authorization": f"Bearer {self.api_key}",
       "Content-Type": "application/json; charset=utf-8"
     }
-    payload = {
-      "model": self.model,
-      "messages": [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": f"Текст для анализа: \n{text}"}
-      ],
-      "response_format": {"type": "json_object"},
-      "temperature": 0.1
-    }
+    for model in self.models:
+      payload = {
+        "model": model,
+        "messages": [
+          {"role": "system", "content": system_prompt},
+          {"role": "user", "content": f"Текст:\n{text}"}
+        ],
+        "response_format": {"type": "json_object"},
+        "temperature": 0.1
+      }
 
-    # response = aiohttp.post(self.url, headers=headers, json=payload, timeout=60)
-    # response.raise_for_status()
-    # data = response.json()
-    # return json.loads(data["choices"][0]["message"]["content"])
-    async with aiohttp.ClientSession() as session:
-      async with session.post(
-        self.url,
-        headers=headers,
-        json=payload,
-        timeout=aiohttp.ClientTimeout(total=60)
-      ) as response:
+      try:
+        logging.info(f"➡ Groq: пробую {model}")
 
-        response.raise_for_status()
+        async with aiohttp.ClientSession() as session:
+          async with session.post(
+            self.url,
+            headers=headers,
+            json=payload,
+            timeout=aiohttp.ClientTimeout(total=60)
+          ) as response:
+              if response.status != 200:
+                if response.status != 200:
+                  text = await response.text()
+                  logging.error(f"""
+              ❌ API ERROR
+              Provider: OpenRouter
+              Model: {model}
+              Status: {response.status}
+              Response: {text[:500]}
+              """)
+                  continue
 
-        data = await response.json()
+              data = await response.json()
 
-        return json.loads(
-          data["choices"][0]["message"]["content"]
-        )
+              try:
+                content = data["choices"][0]["message"]["content"]
+                parsed = json.loads(content)
+                logging.debug(f"RAW LLM RESPONSE: {content[:1000]}")
+                return parsed
+              except Exception:
+                logging.error(f"{model} вернул кривой JSON")
+                continue
+
+      except Exception as e:
+        logging.error(f"{model} упал: {e}")
+        continue
+
+    return None
 
 
 class FallbackLLMParser:
@@ -150,8 +186,9 @@ class FallbackLLMParser:
     Последовательно пробует несколько LLM-провайдеров.
     Используется как fallback-механизм.
   """
-  def __init__(self, providers: list[LLMProvider]):
+  def __init__(self, providers: list[LLMProvider], retries: int = 2):
     self.providers = providers
+    self.retries = retries
 
   async def parse(self, text: str):
     """
@@ -164,14 +201,23 @@ class FallbackLLMParser:
       return None
 
     schema = EventData.model_json_schema()
-    last_error = None
 
-    for provider in self.providers:
-      try:
-        return await provider.parse(text, schema)
-      except Exception as e:
-        last_error = e
-        logging.error("Ошибка у {provider.__class__.__name__}: {e}")
+    
+    for attempt in range(self.retries):
+      logging.info(f"🔁 Попытка {attempt + 1}")
 
-    logging.error("Все API недоступны. Последняя ошибка: {last_error}")
+      for provider in self.providers:
+        try:
+          result = await provider.parse(text, schema)
+
+          if result:
+            logging.info(f"✅ Успех: {provider.__class__.__name__}")
+            return result
+          if result is None:
+            logging.warning(f"{provider.__class__.__name__} не дал результат")
+
+        except Exception as e:
+          logging.error(f"{provider.__class__.__name__} ошибка: {e}")
+
+    logging.error("💀 Все провайдеры умерли")
     return None

@@ -6,11 +6,15 @@ from aiogram.exceptions import TelegramNetworkError, TelegramRetryAfter
 from aiogram.client.default import DefaultBotProperties
 from aiogram.client.telegram import TelegramAPIServer
 from aiogram.client.session.aiohttp import AiohttpSession
-from bot.config import TOKEN, PROXY_URL
+from bot.config import TOKEN, PROXY_URL, GROQ_API_KEY
 from bot.core.handlers import callbacks_router, get_admin_router, user_router, disabled_handler
 from bot.database.schema import init_db
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+  level=logging.INFO,
+  format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+)
+logging.getLogger("aiohttp").setLevel(logging.WARNING)
 
 async def on_startup():
   init_db()
@@ -42,7 +46,6 @@ async def main():
   dp.include_router(user_router)     # пользовательские
   dp.include_router(get_admin_router()) # админские
   
-
   while True:
     try:
       await dp.start_polling(bot)

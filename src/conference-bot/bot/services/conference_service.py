@@ -1,3 +1,4 @@
+import logging
 from typing import Dict, Any, List, Optional
 from bot.models.conference import Conference
 from bot.core.constants import MESSAGES
@@ -6,10 +7,13 @@ from bot.database import conference_repository
 from bot.services.parser.text_extractor import PDFTextExtractor
 from bot.services.parser.llm_service import OpenRouterProvider, GroqProvider, FallbackLLMParser
 from bot.services.parser.models import EventData
-from bot.config import OPENROUTER_API_KEY, GROQ_API_KEY, OPENROUTER_MODEL, GROQ_MODEL, DEEPSEEK_API_KEY
+from bot.config import OPENROUTER_API_KEY, GROQ_API_KEY, OPENROUTER_MODELS, GROQ_MODELS, DEEPSEEK_API_KEY
 from bot.services.post_service import PostService
+from html import escape
+from bot.services.parser.parser_service import ParserService
 
-post_service = PostService(api_key=DEEPSEEK_API_KEY)
+
+post_service = PostService()
 
 class ConferenceService:
   """
@@ -25,34 +29,20 @@ class ConferenceService:
     2. Прогоняет через LLM
     3. Возвращает структурированные данные
     """
-
-    extractor = PDFTextExtractor()
-
-    providers = [
-      GroqProvider(GROQ_API_KEY, GROQ_MODEL),
-      OpenRouterProvider(OPENROUTER_API_KEY, OPENROUTER_MODEL),
-    ]
-
-    parser = FallbackLLMParser(providers)
-
-    # 1. Извлекаем текст
-    raw_text = extractor.extract_text_smart(file_path)
-
-    if not raw_text.strip():
-      return None
-
-    # 2. Парсим через LLM
-    parsed = await parser.parse(raw_text)
+    parser_service = ParserService()
+    
+    parsed = await parser_service.parse_pdf(file_path)
 
     if not parsed:
+      logging.error("❌ LLM не вернул данные для парсинга")
       return None
 
-    # 3. Валидируем через pydantic
     try:
       validated = EventData(**parsed)
       return validated.model_dump()
     except Exception as e:
-      print(f"Ошибка валидации: {e}")
+      logging.exception(f"Ошибка валидации Pydantic: {e}")
+      logging.error(f"Полученные данные: {parsed}")  # ← Важно!
       return None
     
   @staticmethod
@@ -110,23 +100,23 @@ class ConferenceService:
     selected_tags = draft.get("selected_tags", [])
     
     parsed = draft.get("parsed_data", {})
-    text = f"""
-Название: {parsed.get('event_name')}
-Даты: {parsed.get('dates')}
-Место: {parsed.get('location')}
-"""
 
-    raw = draft.get("raw_text", "")
-    post_text = await post_service.generate_post(raw)
+    source_text = f"""
+    Название: {parsed.get('event_name')}
+    Даты: {parsed.get('dates')}
+    Место: {parsed.get('location')}
+    Описание: {parsed.get('topics')}
+    """
+    post_text = await post_service.generate_post(source_text)
     
     if not post_text:
       return "❌ Не удалось сгенерировать пост"
 
-    # сделать обработку ошибки здесь
+    # TODO: сделать обработку ошибки здесь
 
     formatted_post = (
       MESSAGES["publish-post"]["post-preview"]
-      + "<blockquote>" + post_text + "</blockquote>"
+      + "<blockquote>" + escape(post_text) + "</blockquote>"
     )
     
     if selected_tags:
@@ -171,11 +161,5 @@ class ConferenceService:
     )
   @staticmethod
   async def parse_text(text: str):
-    providers = [
-        GroqProvider(GROQ_API_KEY, GROQ_MODEL),
-        OpenRouterProvider(OPENROUTER_API_KEY, OPENROUTER_MODEL),
-    ]
-
-    parser = FallbackLLMParser(providers)
-
-    return await parser.parse(text)
+    parser_service = ParserService()
+    return await parser_service.parser.parse(text)

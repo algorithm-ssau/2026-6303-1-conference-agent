@@ -27,7 +27,7 @@ async def toggle_tag_handler(callback: CallbackQuery, callback_data: TagCallback
     return
   
   data = await state.get_data()
-  data = ConferenceService.toggle_tag(data, callback_data.tag)
+  data = await ConferenceService.toggle_tag(data, callback_data.tag)
   
   await state.update_data(data)
   await callback.message.edit_reply_markup(
@@ -69,7 +69,7 @@ async def process_new_tag(message: Message, state: FSMContext):
   """
   new_tag = message.text.strip()
   data = await state.get_data()
-  data = ConferenceService.add_tag(data, new_tag)
+  data = await ConferenceService.add_tag(data, new_tag)
   
   await state.update_data(data)
   await message.answer(

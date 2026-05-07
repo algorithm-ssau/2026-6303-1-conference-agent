@@ -1,19 +1,19 @@
-# import requests
 import aiohttp
 from typing import Optional, Dict
-
+from bot.config import OPENROUTER_API_KEY, OPENROUTER_MODELS, GROQ_MODELS
 
 class PostService:
     """
       Сервис генерации постов через LLM (DeepSeek).
     """
-    def __init__(self, api_key: str):
-      self.api_key = api_key
-      self.url = "https://api.deepseek.com/v1/chat/completions"
+    def __init__(self):
+      self.api_key = OPENROUTER_API_KEY  # Берем ключ из config.py
+      self.url = "https://openrouter.ai/api/v1/chat/completions"
       self.headers = {
-        "Authorization": f"Bearer {api_key}",
+        "Authorization": f"Bearer {self.api_key}",
         "Content-Type": "application/json"
       }
+      self.models = OPENROUTER_MODELS
 
     async def generate_post(
         self,
@@ -69,41 +69,51 @@ class PostService:
           max_length=max_length
         )
 
-        payload = {
-          "model": "deepseek-chat",
-          "messages": [
-            {
-              "role": "system",
-              "content": "Ты пишешь краткие и понятные посты о научных конференциях."
-            },
-            {
-              "role": "user",
-              "content": prompt
-            }
-          ],
-          "temperature": 0.7,
-          "max_tokens": max_length * 2
-        }
+        for model in self.models:
+          payload = {
+            "model": model,
+            "messages": [
+              {
+                "role": "system",
+                "content": "Ты пишешь краткие и понятные посты о научных конференциях."
+              },
+              {
+                "role": "user",
+                "content": prompt
+              }
+            ],
+            "temperature": 0.7,
+            "max_tokens": max_length * 2
+          }
 
-        try:
-          async with aiohttp.ClientSession() as session:
-            async with session.post(
+          try:
+            print(f"➡ Пробую модель: {model}")
+
+            async with aiohttp.ClientSession() as session:
+              async with session.post(
                 self.url,
                 headers=self.headers,
                 json=payload,
                 timeout=aiohttp.ClientTimeout(total=60)
-            ) as response:
-          
-              response.raise_for_status()
-              
-              if response.status_code != 200:
-                print(f"DeepSeek API error: {response.status_code}")
-                return None
-              
-              data = await response.json()
-              return data["choices"][0]["message"]["content"]
+              ) as response:
 
+                if response.status != 200:
+                  print(f"❌ {model} вернула {response.status}")
+                  continue
 
-        except Exception as e:
-          print(f"Ошибка генерации поста: {e}")
-          return None
+                data = await response.json()
+
+                try:
+                  content = data["choices"][0]["message"]["content"]
+                  print(f"✅ Успех на модели: {model}")
+                  return content
+                except (KeyError, IndexError):
+                  print(f"❌ Кривой ответ от {model}: {data}")
+                  continue
+
+          except Exception as e:
+            print(f"❌ Ошибка на модели {model}: {e}")
+            continue
+
+        print("💀 Все модели умерли")
+        return None
