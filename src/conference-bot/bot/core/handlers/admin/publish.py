@@ -1,12 +1,12 @@
 from aiogram import Router, F
 from aiogram.types import CallbackQuery
 from aiogram.fsm.context import FSMContext
+import logging
 
-from bot.core.constants import MESSAGES
 from bot.core.callbacks import TagCallback, FlowCallback
 from bot.core.states.states import AddConference
 from bot.core.keyboards import post_buttons, main_menu
-from bot.services import ConferenceService, AdminService
+from bot.config import CHANNEL_ID
 
 router = Router()
 
@@ -34,26 +34,58 @@ async def finish_tags(callback: CallbackQuery, state: FSMContext):
   await state.update_data(final_post=final_post)
   await state.set_state(AddConference.preview)
 
-  await callback.message.edit_text(
-    final_post,
-    reply_markup=post_buttons()
-  )
+  try:
+    await callback.message.edit_text(
+      final_post,
+      reply_markup=post_buttons()
+    )
+  except Exception as e:
+    logging.warning(f"edit_text упал, отправляю новым сообщением: {e}")
+    await callback.message.answer(
+        final_post,
+        reply_markup=post_buttons()
+    )
 
 
 @router.callback_query(FlowCallback.filter(F.action == "publish"))
 async def publish(callback: CallbackQuery, state: FSMContext):
   """
-    Публикует пост.
-
-    - (в будущем) Отправляет финальный текст поста в канал
-    - Очищает FSM
+    Публикует пост в канал.
   """
   await callback.answer()
-  # data = await state.get_data()
-  # final_post = data.get("final_post")
-  # TODO: Вызов метода ConferenceService.publish_post(final_post)
-  await state.clear()
-  await callback.message.edit_text(
-    "✅ Пост успешно опубликован!",
-    reply_markup=main_menu(True)
-  )
+  data = await state.get_data()
+  final_post = data.get("final_post")
+
+  if not final_post:
+    await callback.message.edit_text(
+      "❌ Ошибка: нет текста для публикации.", 
+      reply_markup=main_menu(True)
+    )
+    return
+
+  try:
+    # Отправляем сообщение в канал
+    await callback.bot.send_message(
+      chat_id=CHANNEL_ID,
+      text=final_post,
+      parse_mode="HTML"
+    )
+    await state.clear()
+    try:
+      await callback.message.edit_text(
+        "✅ Пост успешно опубликован в канал!",
+        reply_markup=main_menu(True)
+      )
+    except Exception as e:
+      logging.warning(f"Не удалось отредактировать сообщение: {e}")
+      await callback.message.answer(
+        "✅ Пост успешно опубликован в канал!",
+        reply_markup=main_menu(True)
+      )
+
+  except Exception as e:
+    logging.error(f"Ошибка публикации в канал: {e}")
+    await callback.message.edit_text(
+      f"❌ Ошибка публикации: {e}",
+      reply_markup=main_menu(True)
+    )

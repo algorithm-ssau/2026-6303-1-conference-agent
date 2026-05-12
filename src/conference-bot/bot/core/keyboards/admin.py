@@ -45,12 +45,15 @@ def data_buttons():
 def hashtags_keyboard(tags: list[str], selected: list[str]):
     kb = InlineKeyboardBuilder()
 
-    for tag in tags:
-      mark = "☑" if tag in selected else "☐"
-      kb.button(
-        text=f"{mark} {tag}",
-        callback_data=TagCallback(action="toggle", tag=tag).pack()
-      )
+    for i, tag in enumerate(tags):
+        mark = "☑" if tag in selected else "☐"
+        kb.button(
+            text=f"{mark} {tag}",
+            callback_data=TagCallback(
+                action="toggle",
+                tag=str(i)   # ← ВАЖНО: индекс вместо текста
+            ).pack()
+        )
 
     kb.button(
       text="➕ Добавить свой", 

@@ -10,14 +10,14 @@ router = Router()
 
 @router.callback_query(F.data == cb.MAIN_MENU)
 async def cancel_anywhere(callback: CallbackQuery, state: FSMContext):
-    await state.clear()
+  await state.clear()
 
-    await callback.message.edit_text(
-        "Действие отменено",
-        reply_markup=main_menu(
-            AdminService.is_admin(
-                callback.from_user.id,
-                callback.from_user.username
-            )
-        )
+  await callback.message.edit_text(
+    "Действие отменено",
+    reply_markup=main_menu(
+      AdminService.is_admin(
+        callback.from_user.id,
+        callback.from_user.username
+      )
     )
+  )

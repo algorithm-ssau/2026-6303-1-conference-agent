@@ -1,7 +1,7 @@
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
-
+import logging
 from bot.core.keyboards import hashtags_keyboard, back_button
 from bot.core.constants import MESSAGES
 from bot.core.callbacks import TagCallback
@@ -21,21 +21,35 @@ async def toggle_tag_handler(callback: CallbackQuery, callback_data: TagCallback
     :param callback_data: данные callback с тегом
     :param state: FSMContext
   """
-  await callback.answer()
+  try:
+    await callback.answer()
+  except Exception as e:
+    logging.warning(f"Сбой при ответе на callback: {e}")
   
   if not callback_data.tag:
     return
   
   data = await state.get_data()
-  data = await ConferenceService.toggle_tag(data, callback_data.tag)
+  tags = data.get("available_tags", [])
+
+  try:
+    tag_index = int(callback_data.tag)
+    tag = tags[tag_index]
+  except (ValueError, IndexError):
+    return
+
+  data = ConferenceService.toggle_tag(data, tag)
   
   await state.update_data(data)
-  await callback.message.edit_reply_markup(
-    reply_markup=hashtags_keyboard(
-      data.get("available_tags", []),
-      data.get("selected_tags", [])
+  try:
+    await callback.message.edit_reply_markup(
+      reply_markup=hashtags_keyboard(
+        data.get("available_tags", []),
+        data.get("selected_tags", [])
+      )
     )
-  )
+  except Exception as e:
+    logging.warning(f"Сбой при обновлении клавиатуры: {e}")
 
 
 @router.callback_query(TagCallback.filter(F.action == "add"))
@@ -48,7 +62,11 @@ async def add_tag_handler(callback: CallbackQuery, state: FSMContext):
     :param callback: CallbackQuery
     :param state: FSMContext
   """
-  await callback.answer()
+  try:
+    await callback.answer()
+  except Exception:
+    pass
+    
   await state.set_state(AddConference.hashtags)
   await callback.message.edit_text(
     MESSAGES["add-tags"]["enter-tag"],
@@ -69,7 +87,8 @@ async def process_new_tag(message: Message, state: FSMContext):
   """
   new_tag = message.text.strip()
   data = await state.get_data()
-  data = await ConferenceService.add_tag(data, new_tag)
+
+  data = ConferenceService.add_tag(data, new_tag)
   
   await state.update_data(data)
   await message.answer(

@@ -176,11 +176,14 @@ class ConferenceService:
 
   @staticmethod
   def save_to_db(data: dict):
+    # Пытаемся достать первый попавшийся дедлайн, если он спарсен
+    deadlines = data.get("deadlines") or []
+    submission_deadline = deadlines[0].get("date") if deadlines else None
     conference_dict = {
       "name": data.get("event_name"),
       "conference_date": data.get("dates"),
       "location": data.get("location"),
-      "submission_deadline": None,
+      "submission_deadline": submission_deadline,
       "event_type": data.get("event_type"),
       "organizer": data.get("organizer"),
       "dates": data.get("dates"),
