@@ -1,13 +1,11 @@
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 from bot.models.conference import Conference
 from bot.core.constants import MESSAGES
 from bot.database.db_manager import add_conference
 from bot.database import conference_repository
-from bot.services.parser.text_extractor import PDFTextExtractor
-from bot.services.parser.llm_service import OpenRouterProvider, GroqProvider, FallbackLLMParser
 from bot.services.parser.models import EventData
-from bot.config import OPENROUTER_API_KEY, GROQ_API_KEY, OPENROUTER_MODELS, GROQ_MODELS, DEEPSEEK_API_KEY
+from bot.config import TAG_RULES
 from bot.services.post_service import PostService
 from html import escape
 from bot.services.parser.parser_service import ParserService
@@ -46,10 +44,33 @@ class ConferenceService:
       return None
     
   @staticmethod
-  def get_default_tags() -> List[str]:
-    return ["#ai", "#ml", "#science"]
-  
-  
+  async def get_smart_tags(text: str) -> list[str]:
+      text_lower = text.lower()
+      reserved_tags = []
+      
+      # 1. Поиск по зарезервированному словарю (максимум 3)
+      for tag, keywords in TAG_RULES.items():
+          if any(kw.lower() in text_lower for kw in keywords):
+              reserved_tags.append(tag)
+              if len(reserved_tags) == 3:
+                  break
+      
+      # Получаем все теги из словаря для исключения
+      all_reserved_tags = list(TAG_RULES.keys())
+                  
+      # 2. Генерация через LLM с передачей списка исключений
+      llm_tags = await post_service.generate_tags(text, max_tags=7, exclude_tags=all_reserved_tags)
+        
+      # 3. Объединение с дополнительной программной проверкой
+      final_tags = reserved_tags.copy()
+      for tag in llm_tags:
+          tag_lower = tag.lower()
+          # Добавляем, только если тега еще нет в final_tags И он не совпадает ни с одним из TAG_RULES
+          if tag not in final_tags and tag_lower not in all_reserved_tags:
+              final_tags.append(tag)
+              
+      return final_tags
+
   @staticmethod
   def toggle_tag(draft: Dict[str, Any], tag: str) -> Dict[str, Any]:
     """
@@ -143,6 +164,7 @@ class ConferenceService:
   async def create_conference(data: dict):
     return await conference_repository.ConferenceRepository.create(data)
   
+
   @staticmethod
   def format_parsed_data(data: dict) -> str:
     return (
@@ -151,14 +173,25 @@ class ConferenceService:
       f"📍 Место: {data.get('location')}\n"
     )
       
+
   @staticmethod
   def save_to_db(data: dict):
-    return add_conference(
-      name=data.get("event_name"),
-      conference_date=data.get("dates"),
-      location=data.get("location"),
-      submission_deadline=None  # пока заглушка
-    )
+    conference_dict = {
+      "name": data.get("event_name"),
+      "conference_date": data.get("dates"),
+      "location": data.get("location"),
+      "submission_deadline": None,
+      "event_type": data.get("event_type"),
+      "organizer": data.get("organizer"),
+      "dates": data.get("dates"),
+      "status": data.get("status", "active"),
+      "rsci": data.get("rsci", False),
+      "format": data.get("format"),
+      "target_audience": data.get("target_audience")
+    }
+    return add_conference(conference_dict)
+  
+  
   @staticmethod
   async def parse_text(text: str):
     parser_service = ParserService()

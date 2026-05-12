@@ -117,3 +117,32 @@ class PostService:
 
         print("💀 Все модели умерли")
         return None
+    
+
+    async def generate_tags(self, text: str, max_tags: int = 7, exclude_tags: list[str] = None) -> list[str]:
+      prompt = f"Сгенерируй {max_tags} подходящих хэштегов для текста. Выведи только хэштеги через пробел, без нумерации и лишних слов.\n\nТекст: {text[:2000]}"
+      
+      # Передаем список запрещенных тегов
+      if exclude_tags:
+        prompt += f"СТРОГО ЗАПРЕЩЕНО использовать следующие хэштеги: {', '.join(exclude_tags)}\n"
+
+      prompt += f"\nТекст: {text[:2000]}"
+      for model in self.models:
+          payload = {
+              "model": model,
+              "messages": [{"role": "user", "content": prompt}],
+              "temperature": 0.3,
+          }
+          try:
+              async with aiohttp.ClientSession() as session:
+                  async with session.post(self.url, headers=self.headers, json=payload, timeout=30) as response:
+                      if response.status == 200:
+                          data = await response.json()
+                          content = data["choices"][0]["message"]["content"]
+                          # Очищаем ответ от лишних символов и добавляем '#'
+                          tags = [t if t.startswith("#") else f"#{t}" for t in content.split() if t]
+                          return tags[:max_tags]
+          except Exception as e:
+              print(f"Ошибка при генерации тегов: {e}")
+              continue
+      return []

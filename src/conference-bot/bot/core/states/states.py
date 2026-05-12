@@ -7,9 +7,7 @@ class AddConference(StatesGroup):
   post_check = State() # подтверждение текста поста
   hashtags = State()
   preview = State() # финальный просмотр
-  # ocr_check = State()
-  # confirm_save = State()
-  # post = State()
+
   
 class AddAdmin(StatesGroup):
   waiting_user_name = State()

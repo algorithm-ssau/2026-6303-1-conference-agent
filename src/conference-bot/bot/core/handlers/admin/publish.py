@@ -43,32 +43,17 @@ async def finish_tags(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(FlowCallback.filter(F.action == "publish"))
 async def publish(callback: CallbackQuery, state: FSMContext):
   """
-    Публикует конференцию.
+    Публикует пост.
 
-    - Получает данные из FSM
-    - Сохраняет конференцию в БД
-    - (в будущем) публикует пост
+    - (в будущем) Отправляет финальный текст поста в канал
     - Очищает FSM
-    - Возвращает пользователя в главное меню
-
-    :param callback: CallbackQuery
-    :param state: FSMContext
   """
   await callback.answer()
-
-  data = await state.get_data()
-  parsed = data.get("parsed_data")
-
-  try:
-    if parsed:
-      ConferenceService.save_to_db(parsed)
-
-    await state.clear()
-
-    await callback.message.edit_text(
-      "✅ Опубликовано",
-      reply_markup=main_menu(True)
-    )
-
-  except Exception as e:
-    await callback.message.edit_text(f"❌ Ошибка: {e}")
+  # data = await state.get_data()
+  # final_post = data.get("final_post")
+  # TODO: Вызов метода ConferenceService.publish_post(final_post)
+  await state.clear()
+  await callback.message.edit_text(
+    "✅ Пост успешно опубликован!",
+    reply_markup=main_menu(True)
+  )

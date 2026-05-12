@@ -116,37 +116,77 @@ async def process_file(message: Message, state: FSMContext):
       local_path.unlink()
 
 
+# @router.callback_query(FlowCallback.filter(F.action == "ocr_ok"))
+# async def ocr_ok(callback: CallbackQuery, state: FSMContext):
+#   """
+#     Подтверждает корректность распознанного текста (OCR).
+
+#     - Переводит состояние в проверку данных
+#     - Показывает заглушку основной информации
+
+#     :param callback: CallbackQuery
+#     :param state: FSMContext
+#   """
+#   await callback.answer()
+
+#   data = await state.get_data()
+#   text = data.get("raw_text")
+
+#   await callback.message.edit_text("🔍 Парсю данные...")
+
+#   parsed = await ConferenceService.parse_text(text)
+
+#   if not parsed:
+#     await callback.message.edit_text("❌ Ошибка парсинга")
+#     return
+
+#   await state.update_data(parsed_data=parsed)
+#   await state.set_state(AddConference.data_check)
+
+#   await callback.message.edit_text(
+#     ConferenceService.format_parsed_data(parsed),
+#     reply_markup=data_buttons()
+#   )
+
 @router.callback_query(FlowCallback.filter(F.action == "ocr_ok"))
 async def ocr_ok(callback: CallbackQuery, state: FSMContext):
-  """
-    Подтверждает корректность распознанного текста (OCR).
-
-    - Переводит состояние в проверку данных
-    - Показывает заглушку основной информации
-
-    :param callback: CallbackQuery
-    :param state: FSMContext
-  """
   await callback.answer()
-
   data = await state.get_data()
   text = data.get("raw_text")
+  await callback.message.edit_text("🔍 Парсю данные... (это может занять около минуты)")
+  try:
+    parsed = await ConferenceService.parse_text(text)
+    if not parsed:
+      try:
+        await callback.message.edit_text("❌ Ошибка парсинга. Не удалось извлечь данные.")
+      except Exception:
+        await callback.message.answer("❌ Ошибка парсинга.")
+      return
+    await state.update_data(parsed_data=parsed)
+    await state.set_state(AddConference.data_check)
+    response_text = ConferenceService.format_parsed_data(parsed)
+    # Пробуем отредактировать старое сообщение
+    try:
+      await callback.message.edit_text(
+        response_text,
+        reply_markup=data_buttons()
+      )
+    except Exception as e:
+      # Если TCP-соединение отвалилось (WinError 121), отправляем ответ новым сообщением
+      import logging
+      logging.warning(f"Не удалось отредактировать сообщение, отправляю новое: {e}")
+      await callback.message.answer(
+        response_text,
+        reply_markup=data_buttons()
+      )
+  except Exception as e:
+    import logging
+    logging.error(f"Сбой в процессе парсинга: {e}")
+    await callback.message.answer(
+      "❌ Произошла неизвестная ошибка при обращении к нейросетям.",
+      reply_markup=back_button()
+    )
 
-  await callback.message.edit_text("🔍 Парсю данные...")
-
-  parsed = await ConferenceService.parse_text(text)
-
-  if not parsed:
-    await callback.message.edit_text("❌ Ошибка парсинга")
-    return
-
-  await state.update_data(parsed_data=parsed)
-  await state.set_state(AddConference.data_check)
-
-  await callback.message.edit_text(
-    ConferenceService.format_parsed_data(parsed),
-    reply_markup=data_buttons()
-  )
 
 @router.callback_query(FlowCallback.filter(F.action == "data_ok"))
 async def data_ok(callback: CallbackQuery, state: FSMContext):
@@ -162,44 +202,46 @@ async def data_ok(callback: CallbackQuery, state: FSMContext):
   """
   await callback.answer()
   data = await state.get_data()
+  parsed = data.get("parsed_data")
 
-  await callback.message.edit_text("✍️ Генерирую пост...")
-  post_text = await ConferenceService.build_post(data)
-
-  await state.update_data(post_text=post_text)
-  await state.set_state(AddConference.post_check)
-
+  # Сохраняем в БД сразу после подтверждения парсинга
+  if parsed:
+    ConferenceService.save_to_db(parsed)
   await callback.message.edit_text(
-    post_text,
-    reply_markup=post_edit_buttons()
-  )
-    
-@router.callback_query(F.data == cb.CONFIRM_SAVE_CONF)
-async def confirm_save_conf(callback: CallbackQuery, state: FSMContext):
-  """
-    Подтверждает сохранение конференции.
-
-    Сейчас:
-    - Заглушка (TODO: сохранение в БД, проверка дубликатов)
-    - Показывает сообщение об успешном сохранении
-    - Предлагает сгенерировать пост
-
-    :param callback: CallbackQuery
-    :param state: FSMContext
-  """
-  await callback.answer()
-
-  data = await state.get_data()
-
-  # сохранить в БД     
-  # TODO: проверка на дубликаты
-  # TODO: сохранение в БД
-
-  await callback.message.edit_text(
-    MESSAGES["add-conf"]["saved-success"],
+    "✅ Данные успешно сохранены в базу!\n\nПереходим к созданию поста?",
     reply_markup=generate_post_buttons()
-  )    
+  )
+
     
+# @router.callback_query(FlowCallback.filter(F.action == "generate_post"))
+# async def generate_post(callback: CallbackQuery, state: FSMContext):
+#   """
+#     Генерирует текст поста на основе данных конференции.
+
+#     - Получает данные из FSM
+#     - Формирует текст поста через сервис
+#     - Сохраняет пост в FSM
+#     - Переводит состояние в режим редактирования поста
+
+#     :param callback: CallbackQuery
+#     :param state: FSMContext
+#   """
+#   await callback.answer()
+
+#   # Добавляем лоадер, так как генерация занимает время
+#   await callback.message.edit_text("⏳ Генерирую пост, подождите...")
+  
+#   data = await state.get_data()
+#   post_text = await ConferenceService.build_post(data)
+  
+#   await state.update_data(post_text=post_text)
+#   await state.set_state(AddConference.post_check)
+  
+#   await callback.message.edit_text(
+#     post_text,
+#     reply_markup=post_edit_buttons(),
+#     parse_mode="HTML"
+#   )   
     
 @router.callback_query(FlowCallback.filter(F.action == "generate_post"))
 async def generate_post(callback: CallbackQuery, state: FSMContext):
@@ -215,19 +257,50 @@ async def generate_post(callback: CallbackQuery, state: FSMContext):
     :param state: FSMContext
   """
   await callback.answer()
+
+  # Добавляем лоадер, так как генерация занимает время
+  await callback.message.edit_text("⏳ Генерирую пост, подождите...")
   
   data = await state.get_data()
-  post_text = await ConferenceService.build_post(data)
-  
-  await state.update_data(post_text=post_text)
-  await state.set_state(AddConference.post)
-  
-  await callback.message.edit_text(
-    post_text,
-    reply_markup=post_edit_buttons(),
-    parse_mode="HTML"
-  )   
+
+  try:
+    post_text = await ConferenceService.build_post(data)
     
+    if not post_text:
+      try:
+        await callback.message.edit_text("❌ Ошибка генерации поста. Не удалось создать пост.")
+      except Exception:
+        await callback.message.answer("❌ Ошибка генерации")
+      return
+
+    await state.update_data(post_text=post_text)
+    await state.set_state(AddConference.post_check)
+    
+    try:
+      await callback.message.edit_text(
+        post_text,
+        reply_markup=post_edit_buttons(),
+        parse_mode="HTML"
+      ) 
+    except Exception as e:
+      # Если TCP-соединение отвалилось (WinError 121), отправляем ответ новым сообщением
+      logging.warning(f"Не удалось отредактировать сообщение, отправляю новое: {e}")
+      await callback.message.answer(
+        post_text,
+        reply_markup=post_edit_buttons(),
+        parse_mode="HTML"
+      )
+     
+  except Exception as e:
+    import logging
+    logging.error(f"Сбой в процессе генерации поста: {e}")
+    await callback.message.answer(
+      "❌ Произошла неизвестная ошибка при обращении к нейросетям при попытке генерации поста.",
+      reply_markup=back_button()
+    ) 
+
+
+
 @router.callback_query(FlowCallback.filter(F.action == "ocr_edit"))
 async def ocr_edit(callback: CallbackQuery):
   """
@@ -245,6 +318,7 @@ async def ocr_edit(callback: CallbackQuery):
     parse_mode="Markdown"
   )
 
+
 @router.callback_query(FlowCallback.filter(F.action == "to_tags"))
 async def to_tags(callback: CallbackQuery, state: FSMContext):
   """
@@ -259,14 +333,18 @@ async def to_tags(callback: CallbackQuery, state: FSMContext):
     :param state: FSMContext
   """
   await callback.answer()
+  # Лоадер, так как генерация занимает время
+  await callback.message.edit_text("⏳ Подбираю подходящие теги...")
+  data = await state.get_data()
+  post_text = data.get("post_text", "")
 
-  tags = await ConferenceService.get_default_tags()
-
+  # Вызываем наш новый метод со смарт-тегами
+  tags = await ConferenceService.get_smart_tags(post_text)
   await state.update_data(available_tags=tags, selected_tags=[])
   await state.set_state(AddConference.hashtags)
   await callback.message.edit_text(
-    "Выбери теги:",
-    reply_markup=hashtags_keyboard(tags, [])
+      "Выбери теги:",
+      reply_markup=hashtags_keyboard(tags, [])
   )
   
 @router.callback_query(F.data == cb.MAIN_MENU)
