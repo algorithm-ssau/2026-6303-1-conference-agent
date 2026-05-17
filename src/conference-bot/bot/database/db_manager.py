@@ -71,10 +71,10 @@ def get_active_conferences() -> list:
   conn = sqlite3.connect(DB_PATH)
   cursor = conn.cursor()
   cursor.execute('''
-      SELECT * FROM conferences 
-      WHERE is_archived = 0
-        AND submission_deadline >= date('now')
-      ORDER BY submission_deadline
+    SELECT * FROM conferences 
+    WHERE is_archived = 0
+      AND submission_deadline >= date('now')
+    ORDER BY submission_deadline
   ''')
   results = cursor.fetchall()
   conn.close()
@@ -82,18 +82,42 @@ def get_active_conferences() -> list:
 
 
 def archive_past_conferences() -> int:
-    """
-      Архивировать конференции с истекшим дедлайном.
-    """
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('''
-        UPDATE conferences 
-        SET is_archived = 1 
-        WHERE submission_deadline < date('now')
-    ''')
-    conn.commit()
-    count = cursor.rowcount
-    conn.close()
-    return count
+  """
+    Архивировать конференции с истекшим дедлайном.
+  """
+  conn = sqlite3.connect(DB_PATH)
+  cursor = conn.cursor()
+  cursor.execute('''
+    UPDATE conferences 
+    SET is_archived = 1 
+    WHERE submission_deadline < date('now')
+  ''')
+  conn.commit()
+  count = cursor.rowcount
+  conn.close()
+  return count
 
+
+def update_conference_tags(conf_id: int, tags: list[str]) -> bool:
+  conn = sqlite3.connect(DB_PATH)
+  cursor = conn.cursor()
+  tags_str = ", ".join(tags)
+  cursor.execute('UPDATE conferences SET tags = ? WHERE id = ?', (tags_str, conf_id))
+  conn.commit()
+  conn.close()
+  return True
+
+
+def get_active_conferences() -> list:
+  conn = sqlite3.connect(DB_PATH)
+  conn.row_factory = sqlite3.Row  # Теперь возвращаются словари, а не кортежи
+  cursor = conn.cursor()
+  cursor.execute('''
+    SELECT * FROM conferences 
+    WHERE is_archived = 0
+      AND submission_deadline >= date('now')
+    ORDER BY submission_deadline
+  ''')
+  results = [dict(row) for row in cursor.fetchall()] # Конвертируем в словари
+  conn.close()
+  return results

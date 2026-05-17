@@ -18,7 +18,6 @@ class ConferenceService:
     Сервис для управления процессом создания конференции
   """
   
-
   @staticmethod
   async def parse_file(file_path: str) -> dict | None:
     """

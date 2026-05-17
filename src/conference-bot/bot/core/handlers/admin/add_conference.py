@@ -177,9 +177,12 @@ async def data_ok(callback: CallbackQuery, state: FSMContext):
   data = await state.get_data()
   parsed = data.get("parsed_data")
 
-  # Сохраняем в БД сразу после подтверждения парсинга
+  
   if parsed:
-    ConferenceService.save_to_db(parsed)
+    db_id = ConferenceService.save_to_db(parsed)
+    if db_id:
+      await state.update_data(db_id=db_id)  # <-- Сохранили ID
+
   await callback.message.edit_text(
     "✅ Данные успешно сохранены в базу!\n\nПереходим к созданию поста?",
     reply_markup=generate_post_buttons()

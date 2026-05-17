@@ -56,6 +56,16 @@ async def publish(callback: CallbackQuery, state: FSMContext):
   data = await state.get_data()
   final_post = data.get("final_post")
 
+  # ??? 
+  db_id = data.get("db_id")
+  selected_tags = data.get("selected_tags", [])
+
+  if db_id and selected_tags:
+    from bot.database.db_manager import update_conference_tags
+    update_conference_tags(db_id, selected_tags)
+
+  # ???
+
   if not final_post:
     await callback.message.edit_text(
       "❌ Ошибка: нет текста для публикации.", 
