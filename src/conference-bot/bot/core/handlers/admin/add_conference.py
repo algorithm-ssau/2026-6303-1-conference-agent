@@ -11,6 +11,10 @@ from bot.services.parser import PDFTextExtractor
 from bot.services import AdminService, ConferenceService
 import logging, asyncio
 from bot.services.parser.parser_service import ParserService
+from bot.utils.message_manager import show_screen
+
+import asyncio
+from bot.services.search_service import SearchService
 
 parser_service = ParserService()
 router = Router()
@@ -81,7 +85,14 @@ async def process_file(message: Message, state: FSMContext):
   local_path = TEMP_DIR / message.document.file_name
   
   await message.bot.download_file(file.file_path, local_path)
-  await message.answer("📄 Файл получен. Извлекаю текст...(это может занять время)")
+  # await message.answer("📄 Файл получен. Извлекаю текст...(это может занять время)")
+  await show_screen(
+    message, 
+    state, 
+    "Файл получен. Извлекаю текст... (это может занять несколько минут)", 
+    mode="new"
+  )
+
 
   try:
     extractor = PDFTextExtractor()
@@ -96,10 +107,8 @@ async def process_file(message: Message, state: FSMContext):
     await state.set_state(AddConference.text_check)
     safe_text = escape(text[:1000])
     try:
-      await message.answer(
-        f"📄 Проверьте текст:\n\n<blockquote>{safe_text}</blockquote>",
-        reply_markup=ocr_buttons()
-      )
+      await show_screen(message, state, f"📄 Проверьте текст:\n\n<blockquote>{safe_text}</blockquote>", reply_markup=ocr_buttons(), mode="new")
+
     except Exception as e:
       logging.warning(f"Таймаут соединения после OCR, отправляем повторно: {e}")
       await message.answer(
@@ -126,7 +135,9 @@ async def ocr_ok(callback: CallbackQuery, state: FSMContext):
   await callback.answer()
   data = await state.get_data()
   text = data.get("raw_text")
-  await callback.message.edit_text("🔍 Парсю данные... (это может занять около минуты)")
+
+  await show_screen(callback, state, "🔍 Парсю данные...", mode="new")
+  
   try:
     parsed = await ConferenceService.parse_text(text)
     if not parsed:
@@ -135,15 +146,15 @@ async def ocr_ok(callback: CallbackQuery, state: FSMContext):
       except Exception:
         await callback.message.answer("❌ Ошибка парсинга.")
       return
+    
     await state.update_data(parsed_data=parsed)
     await state.set_state(AddConference.data_check)
+
     response_text = ConferenceService.format_parsed_data(parsed)
+    
     # Пробуем отредактировать старое сообщение
     try:
-      await callback.message.edit_text(
-        response_text,
-        reply_markup=data_buttons()
-      )
+      await show_screen(callback, state, response_text, reply_markup=data_buttons(), mode="edit")
     except Exception as e:
       # Если TCP-соединение отвалилось (WinError 121), отправляем ответ новым сообщением
       import logging
@@ -179,14 +190,26 @@ async def data_ok(callback: CallbackQuery, state: FSMContext):
 
   
   if parsed:
-    db_id = ConferenceService.save_to_db(parsed)
+    await show_screen(callback, state, "⏳ Сохраняю данные и считаю векторы...", mode="new")
+    # Собираем строку из фактов
+    text_to_encode = f"{parsed.get('event_name', '')}. {parsed.get('event_type', '')}. Аудитория: {parsed.get('target_audience', '')}. Организатор: {parsed.get('organizer', '')}"
+    
+    # Считаем вектор в отдельном потоке
+    emb_bytes = await asyncio.to_thread(SearchService.get_embedding_bytes, text_to_encode)
+    
+    # Сохраняем в БД уже вместе с вектором
+    db_id = ConferenceService.save_to_db(parsed, emb_bytes)
     if db_id:
-      await state.update_data(db_id=db_id)  # <-- Сохранили ID
-
-  await callback.message.edit_text(
-    "✅ Данные успешно сохранены в базу!\n\nПереходим к созданию поста?",
-    reply_markup=generate_post_buttons()
+      await state.update_data(db_id=db_id)
+  
+  await show_screen(
+    callback, 
+    state, 
+    "✅ Данные успешно сохранены в базу!\n\nПереходим к созданию поста?", 
+    reply_markup=generate_post_buttons(), 
+    mode="new"
   )
+
 
 
 @router.callback_query(FlowCallback.filter(F.action == "generate_post"))
@@ -205,7 +228,7 @@ async def generate_post(callback: CallbackQuery, state: FSMContext):
   await callback.answer()
 
   # Добавляем лоадер, так как генерация занимает время
-  await callback.message.edit_text("⏳ Генерирую пост, подождите...")
+  await show_screen(callback, state, "⏳ Генерирую пост, подождите...", mode="edit")
   
   data = await state.get_data()
 
@@ -223,11 +246,7 @@ async def generate_post(callback: CallbackQuery, state: FSMContext):
     await state.set_state(AddConference.post_check)
     
     try:
-      await callback.message.edit_text(
-        post_text,
-        reply_markup=post_edit_buttons(),
-        parse_mode="HTML"
-      ) 
+      await show_screen(callback, state, post_text, reply_markup=post_edit_buttons(), parse_mode="HTML", mode="edit") 
     except Exception as e:
       # Если TCP-соединение отвалилось (WinError 121), отправляем ответ новым сообщением
       logging.warning(f"Не удалось отредактировать сообщение, отправляю новое: {e}")
@@ -284,7 +303,7 @@ async def to_tags(callback: CallbackQuery, state: FSMContext):
     pass
 
   try:
-    await callback.message.edit_text("⏳ Подбираю подходящие теги (это может занять около минуты)...")
+    await show_screen(callback, state, "⏳ Подбираю подходящие теги...", mode="new")
   except Exception:
     pass
   
@@ -306,10 +325,7 @@ async def to_tags(callback: CallbackQuery, state: FSMContext):
       # Если TCP-соединение отвалилось (WinError 121), отправляем новым сообщением
       import logging
       logging.warning(f"Таймаут соединения, отправляю новым сообщением: {e}")
-      await callback.message.answer(
-        "Выбери теги:",
-        reply_markup=hashtags_keyboard(tags, [])
-      )
+      await show_screen(callback, state, "Выбери теги:", reply_markup=hashtags_keyboard(tags, []), mode="edit")
   except Exception as e:
     import logging
     logging.error(f"Ошибка при подборе тегов: {e}")

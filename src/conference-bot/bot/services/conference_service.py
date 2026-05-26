@@ -9,7 +9,7 @@ from bot.config import TAG_RULES
 from bot.services.post_service import PostService
 from html import escape
 from bot.services.parser.parser_service import ParserService
-
+from bot.services.search_service import SearchService
 
 post_service = PostService()
 
@@ -167,17 +167,31 @@ class ConferenceService:
   @staticmethod
   def format_parsed_data(data: dict) -> str:
     return (
-      f"📌 Название: {data.get('event_name')}\n"
-      f"📅 Даты: {data.get('dates')}\n"
-      f"📍 Место: {data.get('location')}\n"
+      f"- Название: {data.get('event_name')}\n"
+      f"- Формат: {data.get('event_type')}\n"
+      f"- Организатор: {data.get('organizer')}\n"
+      f"- Даты: {data.get('dates')}\n"
+      f"- Масштаб: {data.get('status')}\n"
+      f"- Дедлайн: {data.get('deadlines')}\n"
+      f"- Ссылки: {data.get('links')}\n"
+      f"- Ключевые слова: {data.get('topics')}\n"
+      f"- Место: {data.get('location')}\n"
+      f"- РИНЦ: {data.get('rsci')}\n"
+      f"- Формат проведения: {data.get('format')}\n"
+      f"- Целевая аудитория: {data.get('target_audience')}\n"
     )
       
-
   @staticmethod
-  def save_to_db(data: dict):
+  def save_to_db(data: dict, emb_bytes: bytes = None):
     # Пытаемся достать первый попавшийся дедлайн, если он спарсен
     deadlines = data.get("deadlines") or []
     submission_deadline = deadlines[0].get("date") if deadlines else None
+    
+    topics = data.get("topics") or []
+    topics_str = ", ".join(topics)
+    text_for_embedding = ConferenceService.build_embedding_text(data)
+    emb_bytes = SearchService.get_embedding_bytes(text_for_embedding)
+    
     conference_dict = {
       "name": data.get("event_name"),
       "conference_date": data.get("dates"),
@@ -189,7 +203,9 @@ class ConferenceService:
       "status": data.get("status", "active"),
       "rsci": data.get("rsci", False),
       "format": data.get("format"),
-      "target_audience": data.get("target_audience")
+      "target_audience": data.get("target_audience"),
+      "embedding": emb_bytes,
+      "topics": topics_str
     }
     return add_conference(conference_dict)
   
@@ -198,3 +214,16 @@ class ConferenceService:
   async def parse_text(text: str):
     parser_service = ParserService()
     return await parser_service.parser.parse(text)
+  
+  @staticmethod
+  def build_embedding_text(data: dict) -> str:
+    return f"""
+    {data.get('event_name', '')}
+    {data.get('event_type', '')}
+    {data.get('organizer', '')}
+    {data.get('location', '')}
+    {data.get('target_audience', '')}
+    
+    Тематики:
+    {", ".join(data.get('topics') or [])}
+    """

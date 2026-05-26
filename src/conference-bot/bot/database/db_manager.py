@@ -12,32 +12,35 @@ def add_conference(data: dict) -> int | None:
 
     # Проверка на дубликат
     cursor.execute('''
-        SELECT id FROM conferences 
-        WHERE name = ? AND conference_date = ?
+      SELECT id FROM conferences 
+      WHERE name = ? AND conference_date = ?
     ''', (data.get('name'), data.get('conference_date')))
     
     if cursor.fetchone():
-        conn.close()
-        return None
+      conn.close()
+      return None
 
+    # Добавлен столбец embedding и ?
     cursor.execute('''
-        INSERT INTO conferences (
-            name, event_type, organizer, dates, status,
-            conference_date, location, submission_deadline,
-            rsci, format, target_audience
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (
-        data.get('name'),
-        data.get('event_type'),
-        data.get('organizer'),
-        data.get('dates'),
-        data.get('status'),
-        data.get('conference_date'),
-        data.get('location'),
-        data.get('submission_deadline'),
-        1 if data.get('rsci') else 0,
-        data.get('format'),
-        data.get('target_audience')
+      INSERT INTO conferences (
+        name, event_type, organizer, dates, status,
+        conference_date, location, submission_deadline,
+        rsci, format, target_audience, embedding, topics
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ''', (
+      data.get('name'),
+      data.get('event_type'),
+      data.get('organizer'),
+      data.get('dates'),
+      data.get('status'),
+      data.get('conference_date'),
+      data.get('location'),
+      data.get('submission_deadline'),
+      1 if data.get('rsci') else 0,
+      data.get('format'),
+      data.get('target_audience'),
+      data.get('embedding'),  # Передаем байты вектора
+      data.get('topics')
     ))
     
     conn.commit()
@@ -47,21 +50,21 @@ def add_conference(data: dict) -> int | None:
 
 
 def search_conferences(query: str) -> list:
-    """
-      Поиск по названию среди активных с будущим дедлайном.
-    """
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT * FROM conferences 
-        WHERE name LIKE ? 
-          AND is_archived = 0
-          AND submission_deadline >= date('now')
-        ORDER BY submission_deadline
-    ''', (f'%{query}%',))
-    results = cursor.fetchall()
-    conn.close()
-    return results
+  """
+    Поиск по названию среди активных с будущим дедлайном.
+  """
+  conn = sqlite3.connect(DB_PATH)
+  cursor = conn.cursor()
+  cursor.execute('''
+      SELECT * FROM conferences 
+      WHERE name LIKE ? 
+        AND is_archived = 0
+        AND submission_deadline >= date('now')
+      ORDER BY submission_deadline
+  ''', (f'%{query}%',))
+  results = cursor.fetchall()
+  conn.close()
+  return results
 
 
 def get_active_conferences() -> list:
@@ -96,16 +99,6 @@ def archive_past_conferences() -> int:
   count = cursor.rowcount
   conn.close()
   return count
-
-
-def update_conference_tags(conf_id: int, tags: list[str]) -> bool:
-  conn = sqlite3.connect(DB_PATH)
-  cursor = conn.cursor()
-  tags_str = ", ".join(tags)
-  cursor.execute('UPDATE conferences SET tags = ? WHERE id = ?', (tags_str, conf_id))
-  conn.commit()
-  conn.close()
-  return True
 
 
 def get_active_conferences() -> list:

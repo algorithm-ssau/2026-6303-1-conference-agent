@@ -7,6 +7,10 @@ from bot.core.callbacks import TagCallback, FlowCallback
 from bot.core.states.states import AddConference
 from bot.core.keyboards import post_buttons, main_menu
 from bot.config import CHANNEL_ID
+from bot.utils import show_screen
+from bot.services.search_service import SearchService
+
+import asyncio
 
 router = Router()
 
@@ -35,10 +39,8 @@ async def finish_tags(callback: CallbackQuery, state: FSMContext):
   await state.set_state(AddConference.preview)
 
   try:
-    await callback.message.edit_text(
-      final_post,
-      reply_markup=post_buttons()
-    )
+    await show_screen(callback, state, final_post, reply_markup=post_buttons(), mode="edit")
+
   except Exception as e:
     logging.warning(f"edit_text упал, отправляю новым сообщением: {e}")
     await callback.message.answer(
@@ -54,17 +56,15 @@ async def publish(callback: CallbackQuery, state: FSMContext):
   """
   await callback.answer()
   data = await state.get_data()
-  final_post = data.get("final_post")
 
   # ??? 
   db_id = data.get("db_id")
   selected_tags = data.get("selected_tags", [])
+  final_post = data.get("final_post")
+
 
   if db_id and selected_tags:
-    from bot.database.db_manager import update_conference_tags
-    update_conference_tags(db_id, selected_tags)
-
-  # ???
+    await show_screen(callback, state, "⏳ Публикую...", mode="new")
 
   if not final_post:
     await callback.message.edit_text(
@@ -82,16 +82,10 @@ async def publish(callback: CallbackQuery, state: FSMContext):
     )
     await state.clear()
     try:
-      await callback.message.edit_text(
-        "✅ Пост успешно опубликован в канал!",
-        reply_markup=main_menu(True)
-      )
+      await show_screen(callback, state, "✅ Пост успешно опубликован в канал!", reply_markup=main_menu(True), mode="new")
     except Exception as e:
       logging.warning(f"Не удалось отредактировать сообщение: {e}")
-      await callback.message.answer(
-        "✅ Пост успешно опубликован в канал!",
-        reply_markup=main_menu(True)
-      )
+      await show_screen(callback, state, "✅ Пост успешно опубликован в канал!", reply_markup=main_menu(True), mode="new")
 
   except Exception as e:
     logging.error(f"Ошибка публикации в канал: {e}")

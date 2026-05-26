@@ -2,9 +2,10 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from bot.core.constants import callbacks as cb, MESSAGES
-from bot.core.keyboards import main_menu, back_button, search_buttons, search_buttons_simple
+from bot.core.keyboards import main_menu, back_button, search_buttons_simple
 from bot.core.states.states import Search
 from bot.services import AdminService,SearchService
+from bot.utils.message_manager import show_screen
 
 
 router = Router()
@@ -60,69 +61,34 @@ async def process_search(message: Message, state: FSMContext):
   query = message.text.strip()
   
   if not query:
-    await message.answer(
-      MESSAGES["errors"]["enter-search-request"],
-      reply_markup=back_button()
-    )
-
+    await show_screen(
+      message, 
+      state, 
+      MESSAGES["errors"]["enter-search-request"], 
+      reply_markup=back_button(), 
+      mode="new")
     return
   
+  # Отправляем лоадер новым сообщением, стирая кнопки у прошлого
 
-  await state.update_data(last_query=query, current_offset=0)
-  results = await search_service.search(query, limit=5, offset=0)
+  await show_screen(
+    message, 
+    state, 
+    "🔍 Ищу подходящие конференции (это займет пару секунд)…", 
+    mode="new"
+  ) 
   
-  await state.update_data(total_results=results["total"])
-  formatted_results = SearchService.format_search_results(results["results"])
+  # получаем топ-3 результатов
+  results = await search_service.search(query, limit=3)
+  formatted_results = SearchService.format_search_results(results)
   
-  has_more = results["has_more"] and results["total"] > 5
-  
-  await message.answer(
+  # Заменяем лоадер на результаты
+  await show_screen(
+    message, state,
     formatted_results,
-    reply_markup=search_buttons(has_more=has_more, offset=results["offset"] + results["limit"]),
-    parse_mode="HTML"
+    reply_markup=search_buttons_simple(),
+    parse_mode="HTML",
+    mode="edit"
   )
 
   
-@router.callback_query(F.data.startswith(cb.MORE))
-async def show_more(callback: CallbackQuery, state: FSMContext):
-  """
-    Загружает следующую страницу результатов поиска.
-
-    - Извлекает offset из callback
-    - Выполняет повторный поиск
-    - Обновляет сообщение с результатами
-    - Обновляет кнопки пагинации
-
-    :param callback: CallbackQuery
-    :param state: FSMContext
-  """
-  await callback.answer()
-  
-  try:
-    offset = SearchService.parse_offset(callback.data)
-  except (IndexError, ValueError):
-    offset = 0
-  
-  data = await state.get_data()
-  query = data.get("last_query", "")
-  total_results = data.get("total_results", 0)
-  
-  if not query:
-    await callback.message.edit_text(
-      MESSAGES["errors"]["search-request-not-found"],
-      reply_markup=search_buttons_simple()
-    )
-    return
-  
-  results = await search_service.search(query, limit=5, offset=offset)
-  formatted_results = SearchService.format_search_results(results["results"])
-  has_more = offset + results["limit"] < total_results
-  
-  await callback.message.edit_text(
-    formatted_results,
-    reply_markup=search_buttons(
-      has_more=has_more,
-      offset=offset + results["limit"]
-    ),
-    parse_mode="HTML"
-  )

@@ -74,3 +74,23 @@ async def show_screen(
 
     await state.update_data(last_message_id=msg.message_id)
     return msg
+
+
+async def show_success(target, state, text, kb):
+  return await show_screen(
+    target,
+    state,
+    f"✅ {text}",
+    reply_markup=kb,
+    mode="edit"
+  )
+
+
+async def show_error(target, state, text, kb):
+  return await show_screen(
+    target,
+    state,
+    f"❌ {text}",
+    reply_markup=kb,
+    mode="edit"
+  )

@@ -27,6 +27,7 @@ def init_db():
       is_archived INTEGER DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now')),
       tags TEXT,  -- Новое поле для тегов
+      topics TEXT,
       UNIQUE(name, conference_date)
     )
   ''')
@@ -36,6 +37,27 @@ def init_db():
     cursor.execute("ALTER TABLE conferences ADD COLUMN tags TEXT;")
   except sqlite3.OperationalError:
     pass  # Колонка уже существует
+
+  try:
+    cursor.execute("ALTER TABLE conferences ADD COLUMN embedding BLOB;")
+  except sqlite3.OperationalError:
+    pass
+
+  try:
+    cursor.execute("ALTER TABLE conferences ADD COLUMN topics TEXT;")
+  except sqlite3.OperationalError:
+    pass
+
+
+  cursor.execute('''
+    CREATE TABLE IF NOT EXISTS admins (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      added_by INTEGER,
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  ''')
+
       
   conn.commit()
   conn.close()

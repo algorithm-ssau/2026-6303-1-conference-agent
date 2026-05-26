@@ -43,33 +43,33 @@ def data_buttons():
 
 
 def hashtags_keyboard(tags: list[str], selected: list[str]):
-    kb = InlineKeyboardBuilder()
+  kb = InlineKeyboardBuilder()
 
-    for i, tag in enumerate(tags):
-        mark = "☑" if tag in selected else "☐"
-        kb.button(
-            text=f"{mark} {tag}",
-            callback_data=TagCallback(
-                action="toggle",
-                tag=str(i)   # ← ВАЖНО: индекс вместо текста
-            ).pack()
-        )
-
+  for i, tag in enumerate(tags):
+    mark = "☑" if tag in selected else "☐"
     kb.button(
-      text="➕ Добавить свой", 
-      callback_data=TagCallback(action="add").pack()
-    )
-    kb.button(
-      text="✅ Готово", 
-      callback_data=TagCallback(action="finish").pack()
-      )
-    kb.button(
-      text="❌ Отмена", 
-      callback_data=cb.MAIN_MENU
+      text=f"{mark} {tag}",
+      callback_data=TagCallback(
+        action="toggle",
+        tag=str(i)   # ← ВАЖНО: индекс вместо текста
+      ).pack()
     )
 
-    kb.adjust(1)
-    return kb.as_markup()
+  kb.button(
+    text="➕ Добавить свой", 
+    callback_data=TagCallback(action="add").pack()
+  )
+  kb.button(
+    text="✅ Готово", 
+    callback_data=TagCallback(action="finish").pack()
+    )
+  kb.button(
+    text="❌ Отмена", 
+    callback_data=cb.MAIN_MENU
+  )
+
+  kb.adjust(1)
+  return kb.as_markup()
 
 
 def post_buttons():
@@ -93,8 +93,14 @@ def post_buttons():
 
 def confirmation_buttons():
   kb = InlineKeyboardBuilder()
-  kb.button(text="✅ Да, добавить", callback_data=cb.CONFIRM_ADD_ADMIN)
-  kb.button(text="❌ Отмена", callback_data=cb.MAIN_MENU)
+  kb.button(
+    text="✅ Да, добавить", 
+    callback_data=cb.CONFIRM_ADD_ADMIN
+    )
+  kb.button(
+    text="❌ Отмена", 
+    callback_data=cb.MAIN_MENU
+    )
   kb.adjust(1)
   return kb.as_markup()
 

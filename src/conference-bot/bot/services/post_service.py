@@ -58,7 +58,6 @@ class PostService:
 - Тон: {tone}
 - До {max_length} символов
 - Добавь эмодзи
-- Добавь 3-5 хэштегов
 """
         }
 
@@ -128,21 +127,21 @@ class PostService:
 
       prompt += f"\nТекст: {text[:2000]}"
       for model in self.models:
-          payload = {
-              "model": model,
-              "messages": [{"role": "user", "content": prompt}],
-              "temperature": 0.3,
-          }
-          try:
-              async with aiohttp.ClientSession() as session:
-                  async with session.post(self.url, headers=self.headers, json=payload, timeout=30) as response:
-                      if response.status == 200:
-                          data = await response.json()
-                          content = data["choices"][0]["message"]["content"]
-                          # Очищаем ответ от лишних символов и добавляем '#'
-                          tags = [t if t.startswith("#") else f"#{t}" for t in content.split() if t]
-                          return tags[:max_tags]
-          except Exception as e:
-              print(f"Ошибка при генерации тегов: {e}")
-              continue
+        payload = {
+          "model": model,
+          "messages": [{"role": "user", "content": prompt}],
+          "temperature": 0.3,
+        }
+        try:
+          async with aiohttp.ClientSession() as session:
+            async with session.post(self.url, headers=self.headers, json=payload, timeout=30) as response:
+              if response.status == 200:
+                data = await response.json()
+                content = data["choices"][0]["message"]["content"]
+                # Очищаем ответ от лишних символов и добавляем '#'
+                tags = [t if t.startswith("#") else f"#{t}" for t in content.split() if t]
+                return tags[:max_tags]
+        except Exception as e:
+          print(f"Ошибка при генерации тегов: {e}")
+          continue
       return []

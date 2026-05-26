@@ -43,14 +43,12 @@ class AdminService:
     }
   
   
-  
   @staticmethod
   def get_admins() -> List[str]:
     """
       Возвращает список ID администраторов
     """
     return AdminRepository.get_all()
-  
   
   
   @staticmethod
