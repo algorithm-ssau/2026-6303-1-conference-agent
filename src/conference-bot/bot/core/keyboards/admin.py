@@ -11,7 +11,8 @@ def ocr_buttons():
   )
   kb.button(
     text="✏️ Исправить ", 
-    callback_data=cb.DISABLED
+    callback_data=FlowCallback(action="ocr_edit").pack()
+    # callback_data=cb.DISABLED
     # callback_data=cb.OCR_EDIT
   )
   kb.button(

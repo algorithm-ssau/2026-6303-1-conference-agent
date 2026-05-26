@@ -48,11 +48,10 @@ async def add_conf(callback: CallbackQuery, state: FSMContext):
   await callback.answer()
   await state.clear()
   await state.set_state(AddConference.waiting_for_file)
-  
   await callback.message.edit_text(
     MESSAGES["add-conf"]["upload-file"],
     reply_markup=back_button()
-  ) 
+  )
 
 
 @router.message(AddConference.waiting_for_file)
@@ -103,16 +102,34 @@ async def process_file(message: Message, state: FSMContext):
       await message.answer("❌ Не удалось извлечь текст. Файл пуст")
       return
 
-    await state.update_data(raw_text=text[:4000])  # ограничим
-    await state.set_state(AddConference.text_check)
+    from io import BytesIO
+    from aiogram.types import BufferedInputFile
+
+    file = BufferedInputFile(
+      text.encode("utf-8"),
+      filename="ocr_text.txt"
+    )
+    file.name = "ocr_text.txt"
+
+    await message.answer_document(file, caption="📄 Полный текст для редактирования")
+    preview = f"{escape(text[:500])}\n...\n{escape(text[-500:])}"
+
+
     safe_text = escape(text[:1000])
     try:
-      await show_screen(message, state, f"📄 Проверьте текст:\n\n<blockquote>{safe_text}</blockquote>", reply_markup=ocr_buttons(), mode="new")
+      await show_screen(
+        message, 
+        state, 
+        f"📄 Проверьте текст:\n\n<blockquote>{preview}</blockquote>",
+        reply_markup=ocr_buttons(), 
+        mode="new"
+      )
 
     except Exception as e:
       logging.warning(f"Таймаут соединения после OCR, отправляем повторно: {e}")
       await message.answer(
-        f"📄 Текст распознан:\n\n<blockquote>{safe_text}</blockquote>",
+        # f"📄 Текст распознан:\n\n<blockquote>{safe_text}</blockquote>",
+        f"📄 Проверьте текст:\n\n<blockquote>{preview}</blockquote>",
         reply_markup=ocr_buttons()
       )
 
@@ -267,7 +284,7 @@ async def generate_post(callback: CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(FlowCallback.filter(F.action == "ocr_edit"))
-async def ocr_edit(callback: CallbackQuery):
+async def ocr_edit(callback: CallbackQuery, state: FSMContext):
   """
     Временный обработчик кнопки редактирования OCR ("Исправить").
 
@@ -276,13 +293,58 @@ async def ocr_edit(callback: CallbackQuery):
     :param callback: CallbackQuery
   """
   await callback.answer()
-  await callback.message.edit_text(
-    "🛠️ **Функция редактирования в разработке**\n\n"
-    "Пока что просто нажмите 'Всё верно' для продолжения тестирования.",
-    reply_markup=ocr_buttons(),
-    parse_mode="Markdown"
+  await state.set_state(AddConference.waiting_for_text_edit)
+  await show_screen(
+    callback,
+    state,
+    "✏️ Отправьте исправленный текст в формате .txt",
+    mode="edit"
   )
+  # await callback.message.edit_text(
+  #   "🛠️ **Функция редактирования в разработке**\n\n"
+  #   "Пока что просто нажмите 'Всё верно' для продолжения тестирования.",
+  #   reply_markup=ocr_buttons(),
+  #   parse_mode="Markdown"
+  # )
 
+@router.message(AddConference.waiting_for_text_edit)
+async def receive_edited_text(message: Message, state: FSMContext):
+  if not message.document:
+    await message.answer("❌ Пришлите .txt файл")
+    return
+
+  if not message.document.file_name.endswith(".txt"):
+    await message.answer("❌ Файл должен быть .txt")
+    return
+
+  try:
+    file = await message.bot.get_file(message.document.file_id)
+
+    content = await message.bot.download_file(file.file_path)
+    text = content.read().decode("utf-8") if hasattr(content, "read") else content.decode("utf-8")
+
+    if not text.strip():
+      raise ValueError("Пустой файл")
+
+    await state.update_data(raw_text=text)
+    await state.set_state(AddConference.text_check)
+
+    preview = f"{escape(text[:500])}\n...\n{escape(text[-500:])}"
+
+    await show_screen(
+      message,
+      state,
+      f"📄 Обновлённый текст:\n\n<blockquote>{preview}</blockquote>",
+      reply_markup=ocr_buttons(),
+      mode="new"
+    )
+
+
+  except Exception as e:
+    await message.answer(
+      "❌ Ошибка чтения файла. Попробуйте снова или отмените.",
+      reply_markup=ocr_buttons()
+    )
 
 @router.callback_query(FlowCallback.filter(F.action == "to_tags"))
 async def to_tags(callback: CallbackQuery, state: FSMContext):

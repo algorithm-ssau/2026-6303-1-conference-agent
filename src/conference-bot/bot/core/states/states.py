@@ -3,6 +3,7 @@ from aiogram.fsm.state import State, StatesGroup
 class AddConference(StatesGroup):
   waiting_for_file = State()
   text_check = State() # после OCR
+  waiting_for_text_edit = State()  # ручное редактирование
   data_check = State() 
   post_check = State() # подтверждение текста поста
   hashtags = State()
