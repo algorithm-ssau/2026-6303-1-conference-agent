@@ -197,7 +197,8 @@ class FallbackLLMParser:
       :param text: Входной текст
       :return: dict с данными или None
     """
-    if not text.strip():
+    if not text or not text.strip():
+      logging.error("❌ Пустой текст передан в LLM")
       return None
 
     schema = EventData.model_json_schema()

@@ -6,6 +6,7 @@ class AddConference(StatesGroup):
   waiting_for_text_edit = State()  # ручное редактирование
   data_check = State() 
   post_check = State() # подтверждение текста поста
+  waiting_for_post_edit = State() # ручное редактирование поста
   hashtags = State()
   preview = State() # финальный просмотр
 

@@ -122,12 +122,13 @@ def post_edit_buttons():
   kb = InlineKeyboardBuilder()
   kb.button(
     text="✏️ Редактировать",
-    callback_data=cb.DISABLED
+    callback_data=FlowCallback(action="post_edit").pack()
+    # callback_data=cb.DISABLED
   )
   kb.button(
     text="🔁 Перегенерировать",
-    # callback_data=FlowCallback(action="regen_post").pack()
-    callback_data=cb.DISABLED
+    callback_data=FlowCallback(action="regen_post").pack()
+    # callback_data=cb.DISABLED
   )
   kb.button(
     text="➡ К тегам",

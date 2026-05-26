@@ -101,6 +101,8 @@ async def process_file(message: Message, state: FSMContext):
     if not text.strip():
       await message.answer("❌ Не удалось извлечь текст. Файл пуст")
       return
+    
+    await state.update_data(raw_text=text)
 
     from io import BytesIO
     from aiogram.types import BufferedInputFile
@@ -153,10 +155,30 @@ async def ocr_ok(callback: CallbackQuery, state: FSMContext):
   data = await state.get_data()
   text = data.get("raw_text")
 
+  if not text:
+    await callback.message.answer("❌ Текст не найден. Попробуйте заново.")
+    return
+
   await show_screen(callback, state, "🔍 Парсю данные...", mode="new")
   
   try:
-    parsed = await ConferenceService.parse_text(text)
+    # parsed = await ConferenceService.parse_text(text)
+
+    from pydantic import ValidationError
+    from bot.services.parser.models import EventData
+
+    parsed_raw = await ConferenceService.parse_text(text)
+
+    try:
+        parsed = EventData(**parsed_raw).model_dump()
+    except ValidationError as e:
+        await callback.message.answer(
+            f"❌ Ошибка в структуре данных:\n\n<pre>{escape(str(e))}</pre>",
+            parse_mode="HTML"
+        )
+        return
+
+
     if not parsed:
       try:
         await callback.message.edit_text("❌ Ошибка парсинга. Не удалось извлечь данные.")
@@ -282,6 +304,19 @@ async def generate_post(callback: CallbackQuery, state: FSMContext):
     ) 
 
 
+@router.callback_query(FlowCallback.filter(F.action == "post_edit"))
+async def post_edit(callback: CallbackQuery, state: FSMContext):
+  await callback.answer()
+
+  await state.set_state(AddConference.waiting_for_post_edit)
+
+  await show_screen(
+    callback,
+    state,
+    "✏️ Отправьте новый текст поста одним сообщением",
+    mode="edit"
+  )
+
 
 @router.callback_query(FlowCallback.filter(F.action == "ocr_edit"))
 async def ocr_edit(callback: CallbackQuery, state: FSMContext):
@@ -306,6 +341,7 @@ async def ocr_edit(callback: CallbackQuery, state: FSMContext):
   #   reply_markup=ocr_buttons(),
   #   parse_mode="Markdown"
   # )
+
 
 @router.message(AddConference.waiting_for_text_edit)
 async def receive_edited_text(message: Message, state: FSMContext):
@@ -345,6 +381,80 @@ async def receive_edited_text(message: Message, state: FSMContext):
       "❌ Ошибка чтения файла. Попробуйте снова или отмените.",
       reply_markup=ocr_buttons()
     )
+
+
+@router.message(AddConference.waiting_for_post_edit)
+async def receive_post_edit(message: Message, state: FSMContext):
+  text = message.text
+
+  if not text or not text.strip():
+    await message.answer("❌ Текст не должен быть пустым")
+    return
+
+  try:
+    # если ты используешь HTML-разметку дальше — экранируем
+    safe_text = escape(text)
+
+    formatted_post = (
+      MESSAGES["publish-post"]["post-preview"]
+      + f"<blockquote>{safe_text}</blockquote>"
+    )
+
+    data = await state.get_data()
+    selected_tags = data.get("selected_tags", [])
+
+    if selected_tags:
+      formatted_post += "\n\n" + " ".join(selected_tags)
+
+    await state.update_data(post_text=formatted_post)
+    await state.set_state(AddConference.post_check)
+
+    await show_screen(
+      message,
+      state,
+      formatted_post,
+      reply_markup=post_edit_buttons(),
+      parse_mode="HTML",
+      mode="new"
+    )
+
+  except Exception:
+    await message.answer(
+      "❌ Ошибка обработки текста. Попробуйте снова.",
+      reply_markup=post_edit_buttons()
+    )
+
+
+@router.callback_query(FlowCallback.filter(F.action == "regen_post"))
+async def regen_post(callback: CallbackQuery, state: FSMContext):
+  await callback.answer()
+
+  await show_screen(callback, state, "⏳ Перегенерирую пост...", mode="edit")
+
+  data = await state.get_data()
+
+  try:
+    post_text = await ConferenceService.build_post(data)
+
+    if not post_text:
+      await callback.message.answer("❌ Не удалось перегенерировать пост")
+      return
+
+    await state.update_data(post_text=post_text)
+
+    await show_screen(
+      callback,
+      state,
+      post_text,
+      reply_markup=post_edit_buttons(),
+      parse_mode="HTML",
+      mode="edit"
+    )
+
+  except Exception as e:
+    logging.error(f"Ошибка перегенерации: {e}")
+    await callback.message.answer("❌ Ошибка при перегенерации")
+
 
 @router.callback_query(FlowCallback.filter(F.action == "to_tags"))
 async def to_tags(callback: CallbackQuery, state: FSMContext):
@@ -404,6 +514,7 @@ async def to_tags(callback: CallbackQuery, state: FSMContext):
         reply_markup=main_menu(True)
       )
   
+
 @router.callback_query(F.data == cb.MAIN_MENU)
 async def cancel_anywhere(callback: CallbackQuery, state: FSMContext):
   await state.clear()
