@@ -37,15 +37,19 @@ async def finish_tags(callback: CallbackQuery, state: FSMContext):
 
   await state.update_data(final_post=final_post)
   await state.set_state(AddConference.preview)
+  display_text = f"Финальный вид поста (готово к публикации):\n\n{final_post}"
 
   try:
-    await show_screen(callback, state, final_post, reply_markup=post_buttons(), mode="edit")
-
+    await show_screen(callback, state, display_text, reply_markup=post_buttons(), parse_mode="HTML", mode="edit")
+    
   except Exception as e:
     logging.warning(f"edit_text упал, отправляю новым сообщением: {e}")
     await callback.message.answer(
-        final_post,
-        reply_markup=post_buttons()
+      await callback.message.answer(
+        display_text, 
+        reply_markup=post_buttons(), 
+        parse_mode="HTML"
+      )
     )
 
 

@@ -28,6 +28,7 @@ async def main_menu_handler(callback: CallbackQuery, state: FSMContext):
     reply_markup=main_menu(is_admin)
   )
   
+  
 @router.callback_query(F.data == cb.ABOUT)
 async def about_handler(callback: CallbackQuery):
   """

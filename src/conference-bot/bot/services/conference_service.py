@@ -132,16 +132,16 @@ class ConferenceService:
     if not post_text:
       return "❌ Не удалось сгенерировать пост"
     # Убрали escape и тег blockquote
-    formatted_post = (
-      MESSAGES["publish-post"]["post-preview"]
-      + "\n\n" + post_text
-    )
+    # formatted_post = (
+    #   MESSAGES["publish-post"]["post-preview"]
+    #   + "\n\n" + post_text
+    # )
     
-    if selected_tags:
-      formatted_post += "\n\n" + " ".join(selected_tags)
+    # if selected_tags:
+    #   formatted_post += "\n\n" + " ".join(selected_tags)
     
-    return formatted_post
-  
+    # return formatted_post
+    return post_text
   
   @staticmethod
   async def publish_post(conference: Conference, channel_id: Optional[str] = None) -> bool:

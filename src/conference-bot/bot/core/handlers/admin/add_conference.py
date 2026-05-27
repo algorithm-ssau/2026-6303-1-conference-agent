@@ -88,7 +88,8 @@ async def process_file(message: Message, state: FSMContext):
   await show_screen(
     message, 
     state, 
-    "Файл получен. Извлекаю текст... (это может занять несколько минут)", 
+    "⌛️ Файл получен, извлекаю текст... (это может занять несколько минут)", 
+    parse_mode="HTML",
     mode="new"
   )
 
@@ -113,26 +114,27 @@ async def process_file(message: Message, state: FSMContext):
     )
     file.name = "ocr_text.txt"
 
-    await message.answer_document(file, caption="📄 Полный текст для редактирования")
-    preview = f"{escape(text[:500])}\n...\n{escape(text[-500:])}"
+    await message.answer_document(file, caption="Распознанный текст целиком")
+    preview = f"{escape(text[:100])}\n...\n{escape(text[-100:])}"
 
 
-    safe_text = escape(text[:1000])
+    # safe_text = escape(text[:1000])
     try:
       await show_screen(
         message, 
         state, 
-        f"📄 Проверьте текст:\n\n<blockquote>{preview}</blockquote>",
+        f"📄 Проверьте распознанный текст.\nПревью:\n<blockquote>{preview}</blockquote>",
         reply_markup=ocr_buttons(), 
+        parse_mode="HTML",
         mode="new"
       )
 
     except Exception as e:
       logging.warning(f"Таймаут соединения после OCR, отправляем повторно: {e}")
       await message.answer(
-        # f"📄 Текст распознан:\n\n<blockquote>{safe_text}</blockquote>",
-        f"📄 Проверьте текст:\n\n<blockquote>{preview}</blockquote>",
-        reply_markup=ocr_buttons()
+        f"📄 Проверьте распознанный текст.\nПревью:\n<blockquote>{preview}</blockquote>",
+        reply_markup=ocr_buttons(),
+        parse_mode="HTML"
       )
 
   except Exception as e:
@@ -159,7 +161,7 @@ async def ocr_ok(callback: CallbackQuery, state: FSMContext):
     await callback.message.answer("❌ Текст не найден. Попробуйте заново.")
     return
 
-  await show_screen(callback, state, "🔍 Парсю данные...", mode="new")
+  await show_screen(callback, state, "⌛️ Парсю данные...", mode="new")
   
   try:
     # parsed = await ConferenceService.parse_text(text)
@@ -181,7 +183,7 @@ async def ocr_ok(callback: CallbackQuery, state: FSMContext):
 
     if not parsed:
       try:
-        await callback.message.edit_text("❌ Ошибка парсинга. Не удалось извлечь данные.")
+        await callback.message.edit_text("❌ Ошибка парсинга: не удалось извлечь данные.")
       except Exception:
         await callback.message.answer("❌ Ошибка парсинга.")
       return
@@ -200,14 +202,12 @@ async def ocr_ok(callback: CallbackQuery, state: FSMContext):
       await show_screen(callback, state, response_text, reply_markup=data_buttons(), mode="edit")
     except Exception as e:
       # Если TCP-соединение отвалилось (WinError 121), отправляем ответ новым сообщением
-      import logging
       logging.warning(f"Не удалось отредактировать сообщение, отправляю новое: {e}")
       await callback.message.answer(
         response_text,
         reply_markup=data_buttons()
       )
   except Exception as e:
-    import logging
     logging.error(f"Сбой в процессе парсинга: {e}")
     await callback.message.answer(
       "❌ Произошла неизвестная ошибка при обращении к нейросетям.",
@@ -271,7 +271,7 @@ async def data_edit(callback: CallbackQuery, state: FSMContext):
     await show_screen(
         callback,
         state,
-        "✏️ Отредактируйте данные и отправьте текстом:\n\n"
+        "✏️ Отредактируйте данные и отправьте полный текст. Для корректной обработки соблюдайте синтаксис, как здесь:\n\n"
         f"<pre>{escape(text)}</pre>",
         parse_mode="HTML",
         mode="edit"
@@ -280,52 +280,52 @@ async def data_edit(callback: CallbackQuery, state: FSMContext):
 
 @router.message(AddConference.waiting_for_data_edit)
 async def receive_data_edit(message: Message, state: FSMContext):
-    text = message.text
+  text = message.text
 
-    if not text:
-        await message.answer("❌ Текст не должен быть пустым")
-        return
+  if not text:
+    await message.answer("❌ Текст не должен быть пустым")
+    return
+
+  try:
+    parsed_partial = parse_edited_text(text)
+
+    data = await state.get_data()
+    old_data = data.get("parsed_data", {})
+
+    # объединяем старые и новые данные
+    merged = {**old_data, **parsed_partial}
+
+    from pydantic import ValidationError
+    from bot.services.parser.models import EventData
 
     try:
-        parsed_partial = parse_edited_text(text)
+      validated = EventData(**merged).model_dump()
+    except ValidationError as e:
+      await message.answer(
+        f"❌ Ошибка в данных:\n\n<pre>{escape(str(e))}</pre>",
+        parse_mode="HTML"
+      )
+      return
 
-        data = await state.get_data()
-        old_data = data.get("parsed_data", {})
+    await state.update_data(
+      parsed_data=validated,
+      last_valid_parsed=validated
+    )
 
-        # объединяем старые и новые данные
-        merged = {**old_data, **parsed_partial}
+    response_text = ConferenceService.format_parsed_data(validated)
 
-        from pydantic import ValidationError
-        from bot.services.parser.models import EventData
+    await state.set_state(AddConference.data_check)
 
-        try:
-            validated = EventData(**merged).model_dump()
-        except ValidationError as e:
-            await message.answer(
-                f"❌ Ошибка в данных:\n\n<pre>{escape(str(e))}</pre>",
-                parse_mode="HTML"
-            )
-            return
+    await show_screen(
+      message,
+      state,
+      response_text,
+      reply_markup=data_buttons(),
+      mode="new"
+    )
 
-        await state.update_data(
-            parsed_data=validated,
-            last_valid_parsed=validated
-        )
-
-        response_text = ConferenceService.format_parsed_data(validated)
-
-        await state.set_state(AddConference.data_check)
-
-        await show_screen(
-            message,
-            state,
-            response_text,
-            reply_markup=data_buttons(),
-            mode="new"
-        )
-
-    except Exception as e:
-        await message.answer("❌ Ошибка обработки. Попробуйте снова.")
+  except Exception as e:
+    await message.answer("❌ Ошибка обработки. Попробуйте снова.")
 
 
 @router.callback_query(FlowCallback.filter(F.action == "generate_post"))
@@ -344,7 +344,7 @@ async def generate_post(callback: CallbackQuery, state: FSMContext):
   await callback.answer()
 
   # Добавляем лоадер, так как генерация занимает время
-  await show_screen(callback, state, "⏳ Генерирую пост, подождите...", mode="edit")
+  await show_screen(callback, state, "⌛️Генерирую пост, подождите...", mode="edit")
   
   data = await state.get_data()
 
@@ -373,7 +373,6 @@ async def generate_post(callback: CallbackQuery, state: FSMContext):
       )
      
   except Exception as e:
-    import logging
     logging.error(f"Сбой в процессе генерации поста: {e}")
     await callback.message.answer(
       "❌ Произошла неизвестная ошибка при обращении к нейросетям при попытке генерации поста.",
@@ -409,15 +408,10 @@ async def ocr_edit(callback: CallbackQuery, state: FSMContext):
   await show_screen(
     callback,
     state,
-    "✏️ Отправьте исправленный текст в формате .txt",
+    "✏️ Отправьте исправленный текст (целиком) в формате .txt",
     mode="edit"
   )
-  # await callback.message.edit_text(
-  #   "🛠️ **Функция редактирования в разработке**\n\n"
-  #   "Пока что просто нажмите 'Всё верно' для продолжения тестирования.",
-  #   reply_markup=ocr_buttons(),
-  #   parse_mode="Markdown"
-  # )
+
 
 
 @router.message(AddConference.waiting_for_text_edit)
@@ -449,6 +443,7 @@ async def receive_edited_text(message: Message, state: FSMContext):
       state,
       f"📄 Обновлённый текст:\n\n<blockquote>{preview}</blockquote>",
       reply_markup=ocr_buttons(),
+      parse_mode="HTML",
       mode="new"
     )
 
@@ -462,36 +457,36 @@ async def receive_edited_text(message: Message, state: FSMContext):
 
 @router.message(AddConference.waiting_for_post_edit)
 async def receive_post_edit(message: Message, state: FSMContext):
-    # Используем html_text, чтобы захватить Telegram-форматирование от пользователя
-    text = message.html_text 
-    if not text or not text.strip():
-        await message.answer("❌ Текст не должен быть пустым")
-        return
-    try:
-        # Ставим текст напрямую без escape и blockquote
-        formatted_post = (
-            MESSAGES["publish-post"]["post-preview"]
-            + "\n\n" + text
-        )
-        data = await state.get_data()
-        selected_tags = data.get("selected_tags", [])
-        if selected_tags:
-            formatted_post += "\n\n" + " ".join(selected_tags)
-        await state.update_data(post_text=formatted_post)
-        await state.set_state(AddConference.post_check)
-        await show_screen(
-            message,
-            state,
-            formatted_post,
-            reply_markup=post_edit_buttons(),
-            parse_mode="HTML",
-            mode="new"
-        )
-    except Exception:
-        await message.answer(
-            "❌ Ошибка обработки текста. Попробуйте снова.",
-            reply_markup=post_edit_buttons()
-        )
+  # Используем html_text, чтобы захватить Telegram-форматирование от пользователя
+  text = message.html_text 
+  if not text or not text.strip():
+    await message.answer("❌ Текст не должен быть пустым")
+    return
+  try:
+    # Ставим текст напрямую без escape и blockquote
+    formatted_post = (
+      MESSAGES["publish-post"]["post-preview"]
+      + "\n\n" + text
+    )
+    data = await state.get_data()
+    selected_tags = data.get("selected_tags", [])
+    if selected_tags:
+      formatted_post += "\n\n" + " ".join(selected_tags)
+    await state.update_data(post_text=text)
+    await state.set_state(AddConference.post_check)
+    await show_screen(
+      message,
+      state,
+      formatted_post,
+      reply_markup=post_edit_buttons(),
+      parse_mode="HTML",
+      mode="new"
+    )
+  except Exception:
+    await message.answer(
+      "❌ Ошибка обработки текста. Попробуйте снова.",
+      reply_markup=post_edit_buttons()
+    )
 
 
 @router.callback_query(FlowCallback.filter(F.action == "regen_post"))
@@ -564,11 +559,9 @@ async def to_tags(callback: CallbackQuery, state: FSMContext):
       )
     except Exception as e:
       # Если TCP-соединение отвалилось (WinError 121), отправляем новым сообщением
-      import logging
       logging.warning(f"Таймаут соединения, отправляю новым сообщением: {e}")
       await show_screen(callback, state, "Выбери теги:", reply_markup=hashtags_keyboard(tags, []), mode="edit")
   except Exception as e:
-    import logging
     logging.error(f"Ошибка при подборе тегов: {e}")
     error_msg = "❌ Произошла сетевая ошибка при генерации тегов. Пожалуйста, вернитесь в меню."
     
