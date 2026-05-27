@@ -170,13 +170,13 @@ async def ocr_ok(callback: CallbackQuery, state: FSMContext):
     parsed_raw = await ConferenceService.parse_text(text)
 
     try:
-        parsed = EventData(**parsed_raw).model_dump()
+      parsed = EventData(**parsed_raw).model_dump()
     except ValidationError as e:
-        await callback.message.answer(
-            f"❌ Ошибка в структуре данных:\n\n<pre>{escape(str(e))}</pre>",
-            parse_mode="HTML"
-        )
-        return
+      await callback.message.answer(
+        f"❌ Ошибка в структуре данных:\n\n<pre>{escape(str(e))}</pre>",
+        parse_mode="HTML"
+      )
+      return
 
 
     if not parsed:
@@ -186,7 +186,11 @@ async def ocr_ok(callback: CallbackQuery, state: FSMContext):
         await callback.message.answer("❌ Ошибка парсинга.")
       return
     
-    await state.update_data(parsed_data=parsed)
+    # await state.update_data(parsed_data=parsed)
+    await state.update_data(
+      parsed_data=parsed,
+      last_valid_parsed=parsed
+    )
     await state.set_state(AddConference.data_check)
 
     response_text = ConferenceService.format_parsed_data(parsed)
@@ -249,6 +253,79 @@ async def data_ok(callback: CallbackQuery, state: FSMContext):
     mode="new"
   )
 
+
+@router.callback_query(FlowCallback.filter(F.action == "data_edit"))
+async def data_edit(callback: CallbackQuery, state: FSMContext):
+    try:
+      await callback.answer()
+    except Exception:
+      pass
+    
+    data = await state.get_data()
+    parsed = data.get("parsed_data", {})
+
+    text = ConferenceService.format_parsed_data(parsed)
+
+    await state.set_state(AddConference.waiting_for_data_edit)
+
+    await show_screen(
+        callback,
+        state,
+        "✏️ Отредактируйте данные и отправьте текстом:\n\n"
+        f"<pre>{escape(text)}</pre>",
+        parse_mode="HTML",
+        mode="edit"
+    )
+
+
+@router.message(AddConference.waiting_for_data_edit)
+async def receive_data_edit(message: Message, state: FSMContext):
+    text = message.text
+
+    if not text:
+        await message.answer("❌ Текст не должен быть пустым")
+        return
+
+    try:
+        parsed_partial = parse_edited_text(text)
+
+        data = await state.get_data()
+        old_data = data.get("parsed_data", {})
+
+        # объединяем старые и новые данные
+        merged = {**old_data, **parsed_partial}
+
+        from pydantic import ValidationError
+        from bot.services.parser.models import EventData
+
+        try:
+            validated = EventData(**merged).model_dump()
+        except ValidationError as e:
+            await message.answer(
+                f"❌ Ошибка в данных:\n\n<pre>{escape(str(e))}</pre>",
+                parse_mode="HTML"
+            )
+            return
+
+        await state.update_data(
+            parsed_data=validated,
+            last_valid_parsed=validated
+        )
+
+        response_text = ConferenceService.format_parsed_data(validated)
+
+        await state.set_state(AddConference.data_check)
+
+        await show_screen(
+            message,
+            state,
+            response_text,
+            reply_markup=data_buttons(),
+            mode="new"
+        )
+
+    except Exception as e:
+        await message.answer("❌ Ошибка обработки. Попробуйте снова.")
 
 
 @router.callback_query(FlowCallback.filter(F.action == "generate_post"))
@@ -528,3 +605,59 @@ async def cancel_anywhere(callback: CallbackQuery, state: FSMContext):
       )
     )
   )
+
+
+def parse_edited_text(text: str) -> dict:
+  mapping = {
+    "Название": "event_name",
+    "Формат": "event_type",
+    "Организатор": "organizer",
+    "Даты": "dates",
+    "Масштаб": "status",
+    "Дедлайны": "deadlines",
+    "Ссылки": "links",
+    "Место": "location",
+    "РИНЦ": "rsci",
+    "Формат проведения": "format",
+    "Целевая аудитория": "target_audience",
+    "Ключевые слова": "topics"
+  }
+
+  result = {}
+
+  for line in text.split("\n"):
+    if ":" not in line:
+      continue
+
+    key, value = line.split(":", 1)
+
+    # Избавляемся от дефисов, маркеров списков и пробелов
+    key = key.lstrip("-•* ").strip()
+    value = value.strip()
+
+    if key in mapping:
+      field = mapping[key]
+
+      # Обработка сложных типов (Pydantic упадет, если в list отправить строку)
+      if field == "deadlines" and value:
+        deadlines_list = []
+        for item in value.split(";"):
+          if "-" in item:
+            date, desc = item.split("-", 1)
+            deadlines_list.append({"date": date.strip(), "description": desc.strip()})
+        result[field] = deadlines_list
+      elif field == "links" and value:
+        links_list = []
+        for item in value.split(";"):
+          if "-" in item:
+            url, desc = item.split("-", 1)
+            links_list.append({"url": url.strip(), "description": desc.strip()})
+        result[field] = links_list
+      elif field == "topics" and value:
+        clean_val = value.replace("[", "").replace("]", "").replace("'", "").replace('"', "")
+        result[field] = [v.strip() for v in clean_val.split(",") if v.strip()]
+      elif field == "rsci":
+        result[field] = value.lower() in ("true", "да", "1", "yes")
+      else:
+        result[field] = value
+  return result

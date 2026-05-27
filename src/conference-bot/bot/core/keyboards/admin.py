@@ -31,7 +31,8 @@ def data_buttons():
   )
   kb.button(
     text="✏️ Исправить", 
-    callback_data=cb.DISABLED
+    callback_data=FlowCallback(action="data_edit").pack()
+    # callback_data=cb.DISABLED
     # callback_data=cb.DATA_REGEN
   )
   kb.button(

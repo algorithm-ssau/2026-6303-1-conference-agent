@@ -166,20 +166,30 @@ class ConferenceService:
 
   @staticmethod
   def format_parsed_data(data: dict) -> str:
+    # Форматируем дедлайны
+    deadlines = data.get('deadlines') or []
+    deadlines_str = "; ".join([f"{d.get('date', '')} - {d.get('description', '')}" for d in deadlines])
+    
+    # Форматируем ссылки
+    links = data.get('links') or []
+    links_str = "; ".join([f"{l.get('url', '')} - {l.get('description', '')}" for l in links])
+    
+    
     return (
       f"- Название: {data.get('event_name')}\n"
       f"- Формат: {data.get('event_type')}\n"
       f"- Организатор: {data.get('organizer')}\n"
       f"- Даты: {data.get('dates')}\n"
       f"- Масштаб: {data.get('status')}\n"
-      f"- Дедлайн: {data.get('deadlines')}\n"
-      f"- Ссылки: {data.get('links')}\n"
+      f"- Дедлайны: {deadlines_str}\n"
+      f"- Ссылки: {links_str}\n"
       f"- Ключевые слова: {data.get('topics')}\n"
       f"- Место: {data.get('location')}\n"
       f"- РИНЦ: {data.get('rsci')}\n"
       f"- Формат проведения: {data.get('format')}\n"
       f"- Целевая аудитория: {data.get('target_audience')}\n"
     )
+      
       
   @staticmethod
   def save_to_db(data: dict, emb_bytes: bytes = None):
@@ -191,7 +201,7 @@ class ConferenceService:
     topics = data.get("topics") or []
     topics_str = ", ".join(topics)
     text_for_embedding = ConferenceService.build_embedding_text(data)
-    emb_bytes = SearchService.get_embedding_bytes(text_for_embedding)
+    # emb_bytes = SearchService.get_embedding_bytes(text_for_embedding)
     name = data.get("event_name") or "Без названия"
 
     conference_dict = {
@@ -217,6 +227,7 @@ class ConferenceService:
     parser_service = ParserService()
     return await parser_service.parser.parse(text)
   
+
   @staticmethod
   def build_embedding_text(data: dict) -> str:
     return f"""
