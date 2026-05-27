@@ -462,44 +462,36 @@ async def receive_edited_text(message: Message, state: FSMContext):
 
 @router.message(AddConference.waiting_for_post_edit)
 async def receive_post_edit(message: Message, state: FSMContext):
-  text = message.text
-
-  if not text or not text.strip():
-    await message.answer("❌ Текст не должен быть пустым")
-    return
-
-  try:
-    # если ты используешь HTML-разметку дальше — экранируем
-    safe_text = escape(text)
-
-    formatted_post = (
-      MESSAGES["publish-post"]["post-preview"]
-      + f"<blockquote>{safe_text}</blockquote>"
-    )
-
-    data = await state.get_data()
-    selected_tags = data.get("selected_tags", [])
-
-    if selected_tags:
-      formatted_post += "\n\n" + " ".join(selected_tags)
-
-    await state.update_data(post_text=formatted_post)
-    await state.set_state(AddConference.post_check)
-
-    await show_screen(
-      message,
-      state,
-      formatted_post,
-      reply_markup=post_edit_buttons(),
-      parse_mode="HTML",
-      mode="new"
-    )
-
-  except Exception:
-    await message.answer(
-      "❌ Ошибка обработки текста. Попробуйте снова.",
-      reply_markup=post_edit_buttons()
-    )
+    # Используем html_text, чтобы захватить Telegram-форматирование от пользователя
+    text = message.html_text 
+    if not text or not text.strip():
+        await message.answer("❌ Текст не должен быть пустым")
+        return
+    try:
+        # Ставим текст напрямую без escape и blockquote
+        formatted_post = (
+            MESSAGES["publish-post"]["post-preview"]
+            + "\n\n" + text
+        )
+        data = await state.get_data()
+        selected_tags = data.get("selected_tags", [])
+        if selected_tags:
+            formatted_post += "\n\n" + " ".join(selected_tags)
+        await state.update_data(post_text=formatted_post)
+        await state.set_state(AddConference.post_check)
+        await show_screen(
+            message,
+            state,
+            formatted_post,
+            reply_markup=post_edit_buttons(),
+            parse_mode="HTML",
+            mode="new"
+        )
+    except Exception:
+        await message.answer(
+            "❌ Ошибка обработки текста. Попробуйте снова.",
+            reply_markup=post_edit_buttons()
+        )
 
 
 @router.callback_query(FlowCallback.filter(F.action == "regen_post"))

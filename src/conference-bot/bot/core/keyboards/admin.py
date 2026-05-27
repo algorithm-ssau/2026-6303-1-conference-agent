@@ -80,11 +80,11 @@ def post_buttons():
     text="📢 Опубликовать", 
     callback_data=FlowCallback(action="publish").pack()
   )
-  kb.button(
-    text="💾 Сохранить", 
-    callback_data=cb.DISABLED
-    # callback_data=cb.SAVE
-  )
+  # kb.button(
+  #   text="💾 Сохранить", 
+  #   callback_data=cb.DISABLED
+  #   # callback_data=cb.SAVE
+  # )
   kb.button(
     text="❌ Отмена", 
     callback_data=cb.MAIN_MENU

@@ -131,12 +131,10 @@ class ConferenceService:
     
     if not post_text:
       return "❌ Не удалось сгенерировать пост"
-
-    # TODO: сделать обработку ошибки здесь
-
+    # Убрали escape и тег blockquote
     formatted_post = (
       MESSAGES["publish-post"]["post-preview"]
-      + "<blockquote>" + escape(post_text) + "</blockquote>"
+      + "\n\n" + post_text
     )
     
     if selected_tags:
@@ -190,7 +188,7 @@ class ConferenceService:
       f"- Целевая аудитория: {data.get('target_audience')}\n"
     )
       
-      
+
   @staticmethod
   def save_to_db(data: dict, emb_bytes: bytes = None):
     # Пытаемся достать первый попавшийся дедлайн, если он спарсен
